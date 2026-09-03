@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import asyncio
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 from flask import Flask
 from threading import Thread
 
@@ -30,13 +30,16 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 user_languages = {}
 
+LOGO_URL = "https://raw.githubusercontent.com/pufDev0/apexium-bot/main/logo.png" # İsteğe bağlı GitHub asset linki veya doğrudan görsel URL'si
+
 def get_lang(user_id):
     return user_languages.get(user_id, 'tr')
 
 async def log_event(guild: discord.Guild, title: str, description: str, color: discord.Color = discord.Color.blue()):
     log_channel = discord.utils.get(guild.channels, name="logs")
     if log_channel:
-        embed = discord.Embed(title=title, description=description, color=color)
+        embed = discord.Embed(title=f"🛡️ LOG | {title}", description=description, color=color)
+        embed.timestamp = datetime.utcnow()
         await log_channel.send(embed=embed)
 
 # --- YETKİ DENETİM YARDIMCILARI ---
@@ -68,10 +71,15 @@ class RuleAcceptView(discord.ui.View):
         
         if gamer_role:
             if gamer_role in member.roles:
-                await interaction.response.send_message("Zaten kuralları kabul ettiniz! / You have already accepted the rules!", ephemeral=True)
+                await interaction.response.send_message("✨ Zaten kuralları kabul ettiniz! / You have already accepted the rules!", ephemeral=True)
             else:
                 await member.add_roles(gamer_role)
-                await interaction.response.send_message("🎉 Kuralları kabul ettiniz! Sunucuya erişiminiz açıldı. / Rules accepted! Full access granted.", ephemeral=True)
+                embed = discord.Embed(
+                    title="🎉 Access Granted / Erişim Onaylandı!",
+                    description="Kuralları kabul ettiğin için teşekkürler! Artık tüm topluluk kanallarına erişebilirsin.\n\nThank you for accepting the rules! You now have access to all community channels.",
+                    color=discord.Color.brand_green()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
                 await log_event(guild, "✅ Kurallar Kabul Edildi", f"**Üye:** {member.mention}", discord.Color.green())
         else:
             await interaction.response.send_message("❌ '🎮 Gamer' rolü bulunamadı. Lütfen yetkililere bildirin.", ephemeral=True)
@@ -83,12 +91,14 @@ class LanguageSelectView(discord.ui.View):
     @discord.ui.button(label="Türkçe 🇹🇷", style=discord.ButtonStyle.primary)
     async def turkish_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         user_languages[interaction.user.id] = 'tr'
-        await interaction.response.send_message("Dil tercihiniz **Türkçe** olarak ayarlandı!", ephemeral=True)
+        embed = discord.Embed(title="🌐 Dil Seçildi", description="Tercihiniz **Türkçe** olarak ayarlandı!", color=discord.Color.blue())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.ui.button(label="English 🇬🇧", style=discord.ButtonStyle.secondary)
     async def english_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         user_languages[interaction.user.id] = 'en'
-        await interaction.response.send_message("Your language has been set to **English**!", ephemeral=True)
+        embed = discord.Embed(title="🌐 Language Selected", description="Your language has been set to **English**!", color=discord.Color.blue())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class TicketView(discord.ui.View):
     def __init__(self):
@@ -122,10 +132,11 @@ class TicketView(discord.ui.View):
         await interaction.response.send_message(f"{res_msg}{ticket_channel.mention}", ephemeral=True)
 
         embed = discord.Embed(
-            title="Support / Destek Talebi",
-            description=f"Merhaba {user.mention}, yetkililer en kısa sürede sizinle ilgilenecektir.\nDestek talebini kapatmak için aşağıdaki butona basabilirsiniz." if lang == 'tr' else f"Hello {user.mention}, staff will assist you shortly.\nClick below to close the ticket.",
-            color=discord.Color.green()
+            title="🎫 Support Desk / Destek Masası",
+            description=f"Merhaba {user.mention}, yetkililerimiz en kısa sürede sizinle ilgilenecektir.\n\nHello {user.mention}, our staff will assist you shortly.",
+            color=discord.Color.teal()
         )
+        embed.set_footer(text="Destek talebini kapatmak için aşağıdaki butona basabilirsiniz.")
         await ticket_channel.send(embed=embed, view=CloseTicketView())
         await log_event(guild, "🎟️ Destek Talebi Açıldı", f"**Kullanıcı:** {user.mention}\n**Kanal:** {ticket_channel.mention}", discord.Color.green())
 
@@ -162,19 +173,133 @@ async def on_member_join(member):
     welcome_channel = discord.utils.get(guild.channels, name="welcome")
     if welcome_channel:
         embed = discord.Embed(
-            title="🎉 Welcome to Apexium Community!",
-            description=f"Welcome {member.mention}!\nTo gain full access to channels, please read and accept the rules in the `#rules` channel.",
+            title=f"✨ WELCOME TO {guild.name.upper()}! ✨",
+            description=f"Hoş geldin {member.mention}!\n\nSunucu kanallarına tam erişim sağlamak için lütfen `#rules` kanalındaki kuralları okuyup onaylayın.\n\nWelcome {member.mention}! Please read and accept rules in `#rules` channel to gain full access.",
             color=discord.Color.gold()
         )
-        embed.set_thumbnail(url=member.display_avatar.url)
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+        embed.set_image(url=member.display_avatar.url)
         await welcome_channel.send(embed=embed)
     
     await log_event(guild, "📥 Yeni Üye Katıldı", f"**Üye:** {member.mention} ({member.tag})", discord.Color.blue())
 
+def create_rules_embed(guild: discord.Guild) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"📜 {guild.name} — OFFICIAL RULES / SUNUCU KURALLARI",
+        description="Sunucumuzda keyifli ve güvenli bir ortam sağlamak için aşağıdaki kurallara uymanız zorunludur.\n"
+                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        color=discord.Color.gold()
+    )
+    if guild.icon:
+        embed.set_author(name=guild.name, icon_url=guild.icon.url)
+        embed.set_thumbnail(url=guild.icon.url)
+    
+    embed.add_field(
+        name="1️⃣ Saygı ve İletişim / Respect & Conduct",
+        value="• Her ne koşulda olursa olsun **KÜFÜR, ARGO, HAKARET ve AŞAĞILAYICI DİL YASAKTIR**.\n"
+              "• Absolutely NO profanity, offensive language, insults, or toxicity allowed.",
+        inline=False
+    )
+    embed.add_field(
+        name="2️⃣ Spam ve Reklam / Spam & Self-Promotion",
+        value="• Reklam yapmak, DM yoluyla dahi davet linki atmak kesinlikle ban sebebidir.\n"
+              "• No spamming, mass tagging, or unauthorized promotions/links.",
+        inline=False
+    )
+    embed.add_field(
+        name="3️⃣ Discord Topluluk Kuralları / Discord ToS",
+        value="• Discord Hizmet Şartlarına ve Topluluk İlkelerine tam uyum zorunludur.\n"
+              "• Comply with all Official Discord Terms of Service.",
+        inline=False
+    )
+    embed.add_field(
+        name="✅ Verification / Onay",
+        value="▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
+              "Aşağıdaki **Accept Rules / Kuralları Kabul Et** butonuna basarak tüm sunucuya erişim sağlayabilirsiniz.",
+        inline=False
+    )
+    embed.set_footer(text="Apexium Security System • Rules Enforcement", icon_url=bot.user.display_avatar.url)
+    return embed
+
 # --- KOMUTLAR ---
 
-# 1. /sunucukur (Sadece OWNER)
-@bot.tree.command(name="sunucukur", description="Var olan kanalları siler ve sunucu yapısını baştan kurar.")
+# 1. /info (INFORMATION KOMUTU - GAMER & HERKES)
+@bot.tree.command(name="info", description="Apexium oyunu, geliştirici ve sunucu hakkında havalı bilgiler.")
+async def info_command(interaction: discord.Interaction):
+    lang = get_lang(interaction.user.id)
+    guild = interaction.guild
+    owner = guild.owner
+
+    if lang == 'en':
+        embed = discord.Embed(
+            title="🏃 APEXIUM: PARKOUR CHRONICLES",
+            description="Welcome to the official showcase of **Apexium: Parkour Chronicles**!\n"
+                        "A high-octane, low-poly parkour game designed for extreme agility and thrill-seekers.\n"
+                        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+            color=discord.Color.gold()
+        )
+        embed.add_field(
+            name="🎮 About The Game",
+            value="• **Genre:** 3D Low-Poly Action Parkour\n"
+                  "• **Engine:** Unreal Engine 5\n"
+                  "• **Features:** Fluid movement, dynamic obstacles, time-trials & level checkpoints.",
+            inline=False
+        )
+        embed.add_field(
+            name="👑 Game Creator & Server Owner",
+            value=f"• **Lead Developer:** {owner.mention if owner else 'Berat Eşkiler (@pufDev0)'}\n"
+                  f"• **Discord Profile:** `{owner.name if owner else 'pufDev0'}`\n"
+                  "• **Role:** Game Designer, 3D Modeler & Developer",
+            inline=False
+        )
+        embed.add_field(
+            name="📊 Server Info",
+            value=f"• **Community Name:** {guild.name}\n"
+                  f"• **Total Members:** {guild.member_count}\n"
+                  f"• **Creation Date:** {guild.created_at.strftime('%Y-%m-%d')}",
+            inline=False
+        )
+    else:
+        embed = discord.Embed(
+            title="🏃 APEXIUM: PARKOUR CHRONICLES",
+            description="**Apexium: Parkour Chronicles** resmi bilgi paneline hoş geldiniz!\n"
+                        "Yüksek tempolu, low-poly grafikli ve ekstrem refleks gerektiren bağımsız parkur oyunu projesi.\n"
+                        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+            color=discord.Color.gold()
+        )
+        embed.add_field(
+            name="🎮 Oyun Hakkında",
+            value="• **Tür:** 3D Low-Poly Aksiyon Parkur\n"
+                  "• **Oyun Motoru:** Unreal Engine 5\n"
+                  "• **Özellikler:** Akıcı tırmanış mekanikleri, dinamik tuzaklar, süreye karşı yarış ve check-point sistemi.",
+            inline=False
+        )
+        embed.add_field(
+            name="👑 Yapımcı & Sunucu Kurucusu",
+            value=f"• **Geliştirici:** {owner.mention if owner else 'Berat Eşkiler (@pufDev0)'}\n"
+                  f"• **Discord:** `{owner.name if owner else 'pufDev0'}`\n"
+                  "• **Unvan:** Oyun Tasarımcısı, 3D Modelleyici & Yazılımcı",
+            inline=False
+        )
+        embed.add_field(
+            name="📊 Sunucu Bilgisi",
+            value=f"• **Sunucu:** {guild.name}\n"
+                  f"• **Toplam Üye:** {guild.member_count}\n"
+                  f"• **Kuruluş Tarihi:** {guild.created_at.strftime('%d.%m.%Y')}",
+            inline=False
+        )
+
+    if owner and owner.display_avatar:
+        embed.set_thumbnail(url=owner.display_avatar.url)
+    elif guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    embed.set_footer(text="Apexium Studio • Developed by Berat Eşkiler", icon_url=bot.user.display_avatar.url)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# 2. /sunucukur (Sadece OWNER)
+@bot.tree.command(name="sunucukur", description="Var olan kanalları siler ve ultra havalı sunucu yapısını kurar.")
 @app_commands.default_permissions(administrator=True)
 async def setup_server(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
@@ -213,7 +338,6 @@ async def setup_server(interaction: discord.Interaction):
     except Exception:
         pass
 
-    # KANAL İZİNLERİ HİYERARŞİSİ
     public_read_only = {
         guild.default_role: discord.PermissionOverwrite(send_messages=False, read_messages=True),
         player_role: discord.PermissionOverwrite(send_messages=False, read_messages=True)
@@ -247,7 +371,6 @@ async def setup_server(interaction: discord.Interaction):
         mod_role: discord.PermissionOverwrite(connect=True, view_channel=True)
     }
 
-    # KATEGORİ VEYA KANALLARIN OLUŞTURULMASI
     info_cat = await guild.create_category("INFORMATION")
     await info_cat.create_text_channel("welcome", overwrites=public_read_only)
     rules_ch = await info_cat.create_text_channel("rules", overwrites=public_read_only)
@@ -256,16 +379,7 @@ async def setup_server(interaction: discord.Interaction):
     await info_cat.create_text_channel("logs", overwrites=staff_only_text)
     await info_cat.create_text_channel("staff-commands", overwrites=staff_only_text)
 
-    # Otomatik Kurallar & Onay Mesajını Gönder
-    rules_embed = discord.Embed(
-        title="📜 Server Rules & Verification / Sunucu Kuralları",
-        description="1. Respect all members / Tüm üyelere saygılı olun.\n"
-                    "2. No spam or advertising / Spam ve reklam yasaktır.\n"
-                    "3. Follow Discord ToS / Discord kullanım şartlarına uyun.\n\n"
-                    "Aşağıdaki **Accept Rules** butonuna basarak tüm kanallara erişim sağlayabilirsiniz.",
-        color=discord.Color.gold()
-    )
-    await rules_ch.send(embed=rules_embed, view=RuleAcceptView())
+    await rules_ch.send(embed=create_rules_embed(guild), view=RuleAcceptView())
 
     comm_cat = await guild.create_category("COMMUNITY")
     await comm_cat.create_text_channel("general-chat", overwrites=gamer_access)
@@ -290,14 +404,18 @@ async def setup_server(interaction: discord.Interaction):
     await voice_cat.create_voice_channel("🔒 Staff Voice", overwrites=staff_voice)
     await voice_cat.create_voice_channel("🔒 Owner & Admin Voice", overwrites=owner_admin_voice)
 
-    succ_msg = "✅ İngilizce kanal yapısı, yetkili ses odaları ve kural kabul sistemi kuruldu!" if lang == 'tr' else "✅ English channels, staff voice rooms and rule verification system setup complete!"
+    embed_done = discord.Embed(
+        title="🔥 Apexium Core System Online",
+        description="✅ İngilizce kanal yapısı, kural kabul paneli, /info komutu ve yetkili odaları başarıyla kuruldu!",
+        color=discord.Color.gold()
+    )
     try:
-        await interaction.followup.send(succ_msg, ephemeral=True)
+        await interaction.followup.send(embed=embed_done, ephemeral=True)
     except Exception:
         pass
 
-# 2. /duyuru (ADMIN / OWNER)
-@bot.tree.command(name="duyuru", description="Duyurular kanalına görsel ve açıklamalı duyuru gönderir.")
+# 3. /duyuru (ADMIN / OWNER)
+@bot.tree.command(name="duyuru", description="Duyurular kanalına görsel ve açıklamalı ultra havalı duyuru gönderir.")
 @app_commands.default_permissions(administrator=True)
 async def announce(interaction: discord.Interaction, title: str, message: str, image_url: str = None):
     lang = get_lang(interaction.user.id)
@@ -311,16 +429,32 @@ async def announce(interaction: discord.Interaction, title: str, message: str, i
         await interaction.response.send_message("❌ `#announcements` kanalı bulunamadı.", ephemeral=True)
         return
 
-    embed = discord.Embed(title=f"📢 {title}", description=message, color=discord.Color.gold())
+    guild = interaction.guild
+    embed = discord.Embed(
+        title=f"📢 {title.upper()}",
+        description=f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n{message}\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        color=discord.Color.gold()
+    )
+    
+    if guild.icon:
+        embed.set_author(name=f"{guild.name} • OFFICIAL ANNOUNCEMENT", icon_url=guild.icon.url)
+        embed.set_thumbnail(url=guild.icon.url)
+    else:
+        embed.set_author(name=f"{guild.name} • OFFICIAL ANNOUNCEMENT")
+
     if image_url:
         embed.set_image(url=image_url)
-    embed.set_footer(text=f"Posted by {interaction.user.display_name}")
+
+    embed.set_footer(text=f"Announced by {interaction.user.display_name} • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", icon_url=interaction.user.display_avatar.url)
+    embed.timestamp = datetime.utcnow()
 
     await ann_channel.send(content="@everyone", embed=embed)
-    await interaction.response.send_message("✅ Duyuru başarıyla gönderildi!", ephemeral=True)
+    
+    confirm_embed = discord.Embed(title="✨ Success / Başarılı", description="📢 Duyuru `#announcements` kanalında başarıyla yayınlandı!", color=discord.Color.green())
+    await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
     await log_event(interaction.guild, "📢 Duyuru Paylaşıldı", f"**Başlık:** {title}\n**Yetkili:** {interaction.user.mention}", discord.Color.gold())
 
-# 3. /kurallar (ADMIN / OWNER)
+# 4. /kurallar (ADMIN / OWNER)
 @bot.tree.command(name="kurallar", description="#rules kanalına kural mesajını ve onay butonunu yeniden yollar.")
 @app_commands.default_permissions(administrator=True)
 async def post_rules(interaction: discord.Interaction):
@@ -335,18 +469,11 @@ async def post_rules(interaction: discord.Interaction):
         await interaction.response.send_message("❌ `#rules` kanalı bulunamadı.", ephemeral=True)
         return
 
-    rules_embed = discord.Embed(
-        title="📜 Server Rules & Verification / Sunucu Kuralları",
-        description="1. Respect all members / Tüm üyelere saygılı olun.\n"
-                    "2. No spam or advertising / Spam ve reklam yasaktır.\n"
-                    "3. Follow Discord ToS / Discord kullanım şartlarına uyun.\n\n"
-                    "Aşağıdaki **Accept Rules** butonuna basarak tüm kanallara erişim sağlayabilirsiniz.",
-        color=discord.Color.gold()
-    )
-    await rules_ch.send(embed=rules_embed, view=RuleAcceptView())
-    await interaction.response.send_message("✅ Kural paneli gönderildi!", ephemeral=True)
+    await rules_ch.send(embed=create_rules_embed(interaction.guild), view=RuleAcceptView())
+    embed_ok = discord.Embed(title="✅ Kurallar Gönderildi", description="Kural paneli `#rules` kanalında başarıyla güncellendi.", color=discord.Color.green())
+    await interaction.response.send_message(embed=embed_ok, ephemeral=True)
 
-# 4. /ban (ADMIN / OWNER)
+# 5. /ban (ADMIN / OWNER)
 @bot.tree.command(name="ban", description="Bir kullanıcıyı sunucudan yasaklar.")
 @app_commands.default_permissions(ban_members=True)
 async def ban_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
@@ -355,11 +482,11 @@ async def ban_user(interaction: discord.Interaction, member: discord.Member, rea
         await interaction.response.send_message("❌ Bu komut için **Admin** veya **Owner** olmalısınız!", ephemeral=True)
         return
     await member.ban(reason=reason)
-    msg = f"🚫 {member.mention} sunucudan yasaklandı." if lang == 'tr' else f"🚫 {member.mention} has been banned."
-    await interaction.response.send_message(msg, ephemeral=True)
+    embed = discord.Embed(title="🚫 User Banned / Kullanıcı Yasaklandı", description=f"**Target:** {member.mention}\n**Reason:** {reason}", color=discord.Color.red())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🔨 Ban Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.red())
 
-# 5. /kick (ADMIN / OWNER)
+# 6. /kick (ADMIN / OWNER)
 @bot.tree.command(name="kick", description="Bir kullanıcıyı sunucudan atar.")
 @app_commands.default_permissions(kick_members=True)
 async def kick_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
@@ -368,11 +495,11 @@ async def kick_user(interaction: discord.Interaction, member: discord.Member, re
         await interaction.response.send_message("❌ Bu komut için **Admin** veya **Owner** olmalısınız!", ephemeral=True)
         return
     await member.kick(reason=reason)
-    msg = f"👞 {member.mention} sunucudan atıldı." if lang == 'tr' else f"👞 {member.mention} has been kicked."
-    await interaction.response.send_message(msg, ephemeral=True)
+    embed = discord.Embed(title="👞 User Kicked / Kullanıcı Atıldı", description=f"**Target:** {member.mention}\n**Reason:** {reason}", color=discord.Color.orange())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "👞 Kick Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.orange())
 
-# 6. /mute (MOD / ADMIN / OWNER)
+# 7. /mute (MOD / ADMIN / OWNER)
 @bot.tree.command(name="mute", description="Bir kullanıcıyı belirli bir süre susturur (dakika).")
 @app_commands.default_permissions(moderate_members=True)
 async def mute_user(interaction: discord.Interaction, member: discord.Member, minutes: int, reason: str = "Sebep belirtilmedi"):
@@ -382,11 +509,11 @@ async def mute_user(interaction: discord.Interaction, member: discord.Member, mi
         return
     duration = timedelta(minutes=minutes)
     await member.timeout(duration, reason=reason)
-    msg = f"🤐 {member.mention} **{minutes} dakika** boyunca susturuldu." if lang == 'tr' else f"🤐 {member.mention} muted for **{minutes} minutes**."
-    await interaction.response.send_message(msg, ephemeral=True)
+    embed = discord.Embed(title="🤐 User Muted / Kullanıcı Susturuldu", description=f"**Target:** {member.mention}\n**Duration:** {minutes} Min\n**Reason:** {reason}", color=discord.Color.gold())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🤐 Mute Event", f"**User:** {member.mention}\n**Duration:** {minutes} Min\n**Staff:** {interaction.user.mention}", discord.Color.gold())
 
-# 7. /unmute (MOD / ADMIN / OWNER)
+# 8. /unmute (MOD / ADMIN / OWNER)
 @bot.tree.command(name="unmute", description="Bir kullanıcının susturmasını kaldırır.")
 @app_commands.default_permissions(moderate_members=True)
 async def unmute_user(interaction: discord.Interaction, member: discord.Member):
@@ -395,11 +522,11 @@ async def unmute_user(interaction: discord.Interaction, member: discord.Member):
         await interaction.response.send_message("❌ Yetkiniz yetersiz!", ephemeral=True)
         return
     await member.timeout(None)
-    msg = f"🔊 {member.mention} kullanıcısının susturması kaldırıldı." if lang == 'tr' else f"🔊 {member.mention} unmuted."
-    await interaction.response.send_message(msg, ephemeral=True)
+    embed = discord.Embed(title="🔊 User Unmuted / Susturma Kaldırıldı", description=f"**Target:** {member.mention}", color=discord.Color.green())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🔊 Unmute Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}", discord.Color.green())
 
-# 8. /lock (MOD / ADMIN / OWNER)
+# 9. /lock (MOD / ADMIN / OWNER)
 @bot.tree.command(name="lock", description="Komutun yazıldığı kanala mesaj gönderimini kilitler.")
 @app_commands.default_permissions(manage_channels=True)
 async def lock_channel(interaction: discord.Interaction):
@@ -411,11 +538,11 @@ async def lock_channel(interaction: discord.Interaction):
     overwrite = channel.overwrites_for(interaction.guild.default_role)
     overwrite.send_messages = False
     await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
-    msg = "🔒 Bu kanal mesaj gönderimine kilitlendi." if lang == 'tr' else "🔒 Channel locked."
-    await interaction.response.send_message(msg)
+    embed = discord.Embed(title="🔒 Channel Locked / Kanal Kilitlendi", description=f"**Channel:** {channel.mention}", color=discord.Color.dark_red())
+    await interaction.response.send_message(embed=embed)
     await log_event(interaction.guild, "🔒 Lock Event", f"**Channel:** {channel.mention}\n**Staff:** {interaction.user.mention}", discord.Color.dark_red())
 
-# 9. /unlock (MOD / ADMIN / OWNER)
+# 10. /unlock (MOD / ADMIN / OWNER)
 @bot.tree.command(name="unlock", description="Kilitli kanalı tekrar mesaj gönderimine açar.")
 @app_commands.default_permissions(manage_channels=True)
 async def unlock_channel(interaction: discord.Interaction):
@@ -427,11 +554,11 @@ async def unlock_channel(interaction: discord.Interaction):
     overwrite = channel.overwrites_for(interaction.guild.default_role)
     overwrite.send_messages = None
     await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
-    msg = "🔓 Kanal kilidi açıldı." if lang == 'tr' else "🔓 Channel unlocked."
-    await interaction.response.send_message(msg)
+    embed = discord.Embed(title="🔓 Channel Unlocked / Kanal Açıldı", description=f"**Channel:** {channel.mention}", color=discord.Color.green())
+    await interaction.response.send_message(embed=embed)
     await log_event(interaction.guild, "🔓 Unlock Event", f"**Channel:** {channel.mention}\n**Staff:** {interaction.user.mention}", discord.Color.green())
 
-# 10. /sil (MOD / ADMIN / OWNER)
+# 11. /sil (MOD / ADMIN / OWNER)
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı kanaldan siler.")
 @app_commands.default_permissions(manage_messages=True)
 async def purge_messages(interaction: discord.Interaction, amount: int):
@@ -444,48 +571,55 @@ async def purge_messages(interaction: discord.Interaction, amount: int):
         return
     await interaction.response.defer(ephemeral=True)
     deleted = await interaction.channel.purge(limit=amount)
-    msg = f"🗑️ **{len(deleted)}** mesaj silindi." if lang == 'tr' else f"🗑️ **{len(deleted)}** messages deleted."
-    await interaction.followup.send(msg, ephemeral=True)
+    embed = discord.Embed(title="🗑️ Messages Purged / Mesajlar Silindi", description=f"**Deleted:** {len(deleted)} messages", color=discord.Color.purple())
+    await interaction.followup.send(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🗑️ Purge Event", f"**Channel:** {interaction.channel.mention}\n**Count:** {len(deleted)}\n**Staff:** {interaction.user.mention}", discord.Color.purple())
 
-# 11. /help (GAMER / HERKES)
+# 12. /help (GAMER / HERKES)
 @bot.tree.command(name="help", description="Sunucu kullanım rehberi ve komut listesi.")
 async def help_command(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
+    guild = interaction.guild
     if lang == 'en':
         embed = discord.Embed(
-            title="🎮 Apexium Gamer Guide",
-            description="Welcome to the server! Here is a guide to get you started:",
+            title=f"🎮 {guild.name.upper()} — GAMER GUIDE",
+            description="Welcome to our official gaming hub! Follow this guide to get started:\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
             color=discord.Color.green()
         )
-        embed.add_field(name="📜 1. Verification", value="Go to `#rules` and click **Accept Rules** to unlock all channels.", inline=False)
-        embed.add_field(name="🌐 2. Language", value="Type `/language` to switch between Turkish & English.", inline=False)
-        embed.add_field(name="📩 3. Support", value="Open a ticket in `#create-ticket` if you need help from staff.", inline=False)
-        embed.add_field(name="🏓 4. Commands", value="`/ping` - Check latency\n`/help` - Open this guide", inline=False)
+        embed.add_field(name="📜 1. Verification", value="Head to `#rules` and click **Accept Rules** to unlock all channels.", inline=False)
+        embed.add_field(name="🏃 2. Game Info", value="Type `/info` to check game details, creator profile & server stats.", inline=False)
+        embed.add_field(name="🌐 3. Language", value="Use `/language` to toggle between Turkish & English.", inline=False)
+        embed.add_field(name="📩 4. Support Desk", value="Need assistance? Open a ticket in `#create-ticket`.", inline=False)
+        embed.add_field(name="🏓 5. Commands", value="`/ping` • Check latency\n`/info` • Game & Owner Details\n`/help` • Display this guide", inline=False)
     else:
         embed = discord.Embed(
-            title="🎮 Apexium Oyuncu Rehberi",
-            description="Sunucumuza hoş geldiniz! İşte başlangıç için kullanabileceğiniz rehber:",
+            title=f"🎮 {guild.name.upper()} — OYUNCU REHBERİ",
+            description="Sunucumuza hoş geldiniz! Başlangıç rehberiniz aşağıdadır:\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
             color=discord.Color.green()
         )
-        embed.add_field(name="📜 1. Sunucu Kaydı", value="`#rules` kanalına gidip **Accept Rules** butonuna basarak tüm kanalları açın.", inline=False)
-        embed.add_field(name="🌐 2. Dil Seçimi", value="`/language` yazarak bot dilini Türkçe veya İngilizce yapabilirsiniz.", inline=False)
-        embed.add_field(name="📩 3. Destek & İletişim", value="Bir sorun yaşarsanız `#create-ticket` kanalından destek talebi açabilirsiniz.", inline=False)
-        embed.add_field(name="🏓 4. Kullanılabilir Komutlar", value="`/ping` - Bot gecikmesini ölçer\n`/help` - Bu rehber menüsünü açar", inline=False)
+        embed.add_field(name="📜 1. Sunucu Kaydı", value="`#rules` kanalına gidin ve **Accept Rules** butonuna basarak kanalları açın.", inline=False)
+        embed.add_field(name="🏃 2. Oyun & Sunucu Bilgisi", value="`/info` yazarak oyun detaylarını, yapımcı profilini ve istatistikleri görün.", inline=False)
+        embed.add_field(name="🌐 3. Dil Seçimi", value="`/language` komutuyla dili Türkçe veya İngilizce yapabilirsiniz.", inline=False)
+        embed.add_field(name="📩 4. Destek Masası", value="Yetkililere ulaşmak için `#create-ticket` kanalından bilet açabilirsiniz.", inline=False)
+        embed.add_field(name="🏓 5. Komutlar", value="`/ping` • Gecikmeyi ölçer\n`/info` • Oyun & Kurucu Bilgisi\n`/help` • Bu rehberi açar", inline=False)
 
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+    embed.set_footer(text="Apexium Bot Community System", icon_url=bot.user.display_avatar.url)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# 12. Genel Komutlar
+# 13. Genel Komutlar
 @bot.tree.command(name="language", description="Select your language / Dilinizi seçin")
 async def language(interaction: discord.Interaction):
-    await interaction.response.send_message("Lütfen dil seçin / Please select a language:", view=LanguageSelectView(), ephemeral=True)
+    embed = discord.Embed(title="🌐 Language Selection / Dil Seçimi", description="Lütfen aşağıdaki butonlardan birini seçin / Select a button below:", color=discord.Color.blurple())
+    await interaction.response.send_message(embed=embed, view=LanguageSelectView(), ephemeral=True)
 
 @bot.tree.command(name="ping", description="Botun gecikmesini gösterir.")
 async def ping(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
     ms = round(bot.latency * 1000)
-    msg = f"🏓 Pong! Latency: **{ms}ms**" if lang == 'en' else f"🏓 Pong! Gecikme Süresi: **{ms}ms**"
-    await interaction.response.send_message(msg, ephemeral=True)
+    embed = discord.Embed(title="🏓 Pong!", description=f"Gecikme Süresi: **{ms}ms**" if lang == 'tr' else f"Latency: **{ms}ms**", color=discord.Color.green())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 TOKEN = os.getenv("DISCORD_TOKEN") or "MTU0NDY5OTM3OTA5OTc3MDg5Mg.GLxPNK.zX5pectcQSndVdHhUNVGitM9V5GqD_kWGQ5L_0"
 
