@@ -39,7 +39,43 @@ async def log_event(guild: discord.Guild, title: str, description: str, color: d
         embed = discord.Embed(title=title, description=description, color=color)
         await log_channel.send(embed=embed)
 
+# --- YETKİ DENETİM YARDIMCILARI ---
+def is_owner(interaction: discord.Interaction) -> bool:
+    return interaction.user.id == interaction.guild.owner_id
+
+def is_admin_or_owner(interaction: discord.Interaction) -> bool:
+    if interaction.user.id == interaction.guild.owner_id:
+        return True
+    admin_role = discord.utils.get(interaction.guild.roles, name="🛠️ Admin")
+    return admin_role in interaction.user.roles if admin_role else False
+
+def is_staff(interaction: discord.Interaction) -> bool:
+    if is_admin_or_owner(interaction):
+        return True
+    mod_role = discord.utils.get(interaction.guild.roles, name="🛡️ Moderator")
+    return mod_role in interaction.user.roles if mod_role else False
+
 # --- ARAYÜZ (VIEWS) ---
+class RuleAcceptView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="✅ Accept Rules / Kuralları Kabul Et", style=discord.ButtonStyle.success, custom_id="accept_rules_btn")
+    async def accept_rules(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        member = interaction.user
+        gamer_role = discord.utils.get(guild.roles, name="🎮 Gamer")
+        
+        if gamer_role:
+            if gamer_role in member.roles:
+                await interaction.response.send_message("Zaten kuralları kabul ettiniz! / You have already accepted the rules!", ephemeral=True)
+            else:
+                await member.add_roles(gamer_role)
+                await interaction.response.send_message("🎉 Kuralları kabul ettiniz! Sunucuya erişiminiz açıldı. / Rules accepted! Full access granted.", ephemeral=True)
+                await log_event(guild, "✅ Kurallar Kabul Edildi", f"**Üye:** {member.mention}", discord.Color.green())
+        else:
+            await interaction.response.send_message("❌ '🎮 Gamer' rolü bulunamadı. Lütfen yetkililere bildirin.", ephemeral=True)
+
 class LanguageSelectView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=180)
@@ -110,30 +146,24 @@ class CloseTicketView(discord.ui.View):
 @bot.event
 async def on_ready():
     print(f'Bot {bot.user.name} olarak giriş yaptı!')
+    bot.add_view(RuleAcceptView())
+    bot.add_view(TicketView())
     try:
         for guild in bot.guilds:
             bot.tree.copy_global_to(guild=guild)
             await bot.tree.sync(guild=guild)
-        print("✅ Slash komutları sunucuya özel anında yüklendi!")
+        print("✅ Slash komutları ve Persistent View'lar yüklendi!")
     except Exception as e:
         print(f"Hata: {e}")
 
 @bot.event
 async def on_member_join(member):
     guild = member.guild
-    player_role = discord.utils.get(guild.roles, name="🎮 Gamer")
-    if player_role:
-        try:
-            await member.add_roles(player_role)
-        except Exception:
-            pass
-
     welcome_channel = discord.utils.get(guild.channels, name="welcome")
     if welcome_channel:
         embed = discord.Embed(
-            title="🎉 Sunucuya Hoş Geldin! / Welcome!",
-            description=f"Selam {member.mention}! Oyunumuzun resmi Discord sunucusuna hoş geldin.\n"
-                        f"Kayıt olmak için sohbet kanallarına `/language` yazarak dilini seçebilirsin.",
+            title="🎉 Welcome to Apexium Community!",
+            description=f"Welcome {member.mention}!\nTo gain full access to channels, please read and accept the rules in the `#rules` channel.",
             color=discord.Color.gold()
         )
         embed.set_thumbnail(url=member.display_avatar.url)
@@ -143,13 +173,14 @@ async def on_member_join(member):
 
 # --- KOMUTLAR ---
 
-# Sadece Sunucu Sahibi (Owner) Kullanabilir
+# 1. /sunucukur (Sadece OWNER)
 @bot.tree.command(name="sunucukur", description="Var olan kanalları siler ve sunucu yapısını baştan kurar.")
+@app_commands.default_permissions(administrator=True)
 async def setup_server(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
-    if interaction.user.id != interaction.guild.owner_id:
-        err_msg = "❌ Bu komutu sadece **Sunucu Sahibi (Owner)** kullanabilir!" if lang == 'tr' else "❌ Only the **Server Owner** can use this command!"
-        await interaction.response.send_message(err_msg, ephemeral=True)
+    if not is_owner(interaction):
+        msg = "❌ Bu komutu sadece **Sunucu Sahibi (Owner)** kullanabilir!" if lang == 'tr' else "❌ Only the **Server Owner** can use this command!"
+        await interaction.response.send_message(msg, ephemeral=True)
         return
 
     await interaction.response.defer(ephemeral=True)
@@ -161,180 +192,290 @@ async def setup_server(interaction: discord.Interaction):
         except Exception:
             pass
 
-    owner_role = discord.utils.get(guild.roles, name="👑 Owner")
-    if not owner_role:
-        owner_role = await guild.create_role(name="👑 Owner", permissions=discord.Permissions.all(), color=discord.Color.gold(), hoist=True)
-
+    owner_role = discord.utils.get(guild.roles, name="👑 Owner") or await guild.create_role(name="👑 Owner", permissions=discord.Permissions.all(), color=discord.Color.gold(), hoist=True)
+    
     admin_perms = discord.Permissions(
         manage_channels=True, manage_roles=True, kick_members=True, ban_members=True,
         manage_messages=True, read_messages=True, send_messages=True, connect=True, speak=True
     )
-    admin_role = discord.utils.get(guild.roles, name="🛠️ Admin")
-    if not admin_role:
-        admin_role = await guild.create_role(name="🛠️ Admin", permissions=admin_perms, color=discord.Color.red(), hoist=True)
+    admin_role = discord.utils.get(guild.roles, name="🛠️ Admin") or await guild.create_role(name="🛠️ Admin", permissions=admin_perms, color=discord.Color.red(), hoist=True)
 
     mod_perms = discord.Permissions(
         manage_messages=True, mute_members=True, deafen_members=True,
         read_messages=True, send_messages=True, connect=True, speak=True
     )
-    mod_role = discord.utils.get(guild.roles, name="🛡️ Moderator")
-    if not mod_role:
-        mod_role = await guild.create_role(name="🛡️ Moderator", permissions=mod_perms, color=discord.Color.blue(), hoist=True)
+    mod_role = discord.utils.get(guild.roles, name="🛡️ Moderator") or await guild.create_role(name="🛡️ Moderator", permissions=mod_perms, color=discord.Color.blue(), hoist=True)
 
-    player_role = discord.utils.get(guild.roles, name="🎮 Gamer")
-    if not player_role:
-        player_role = await guild.create_role(name="🎮 Gamer", permissions=discord.Permissions.general(), color=discord.Color.green(), hoist=True)
+    player_role = discord.utils.get(guild.roles, name="🎮 Gamer") or await guild.create_role(name="🎮 Gamer", permissions=discord.Permissions.general(), color=discord.Color.green(), hoist=True)
 
     try:
         await interaction.user.add_roles(owner_role)
     except Exception:
         pass
 
-    read_only_for_everyone = {
+    # KANAL İZİNLERİ HİYERARŞİSİ
+    public_read_only = {
         guild.default_role: discord.PermissionOverwrite(send_messages=False, read_messages=True),
-        admin_role: discord.PermissionOverwrite(send_messages=True, read_messages=True),
-        owner_role: discord.PermissionOverwrite(send_messages=True, read_messages=True)
+        player_role: discord.PermissionOverwrite(send_messages=False, read_messages=True)
     }
 
-    staff_only_logs = {
+    gamer_access = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        player_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+
+    staff_only_text = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        player_role: discord.PermissionOverwrite(read_messages=False),
         owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
         admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
         mod_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
     }
 
-    admin_only_voice = {
+    owner_admin_voice = {
         guild.default_role: discord.PermissionOverwrite(connect=False, view_channel=True),
+        player_role: discord.PermissionOverwrite(connect=False, view_channel=True),
+        owner_role: discord.PermissionOverwrite(connect=True, view_channel=True),
+        admin_role: discord.PermissionOverwrite(connect=True, view_channel=True)
+    }
+
+    staff_voice = {
+        guild.default_role: discord.PermissionOverwrite(connect=False, view_channel=True),
+        player_role: discord.PermissionOverwrite(connect=False, view_channel=True),
         owner_role: discord.PermissionOverwrite(connect=True, view_channel=True),
         admin_role: discord.PermissionOverwrite(connect=True, view_channel=True),
         mod_role: discord.PermissionOverwrite(connect=True, view_channel=True)
     }
 
+    # KATEGORİ VEYA KANALLARIN OLUŞTURULMASI
     info_cat = await guild.create_category("INFORMATION")
-    await info_cat.create_text_channel("welcome", overwrites=read_only_for_everyone)
-    await info_cat.create_text_channel("rules", overwrites=read_only_for_everyone)
-    await info_cat.create_text_channel("announcements", overwrites=read_only_for_everyone)
-    await info_cat.create_text_channel("updates", overwrites=read_only_for_everyone)
-    await info_cat.create_text_channel("logs", overwrites=staff_only_logs)
+    await info_cat.create_text_channel("welcome", overwrites=public_read_only)
+    rules_ch = await info_cat.create_text_channel("rules", overwrites=public_read_only)
+    await info_cat.create_text_channel("announcements", overwrites=public_read_only)
+    await info_cat.create_text_channel("updates", overwrites=public_read_only)
+    await info_cat.create_text_channel("logs", overwrites=staff_only_text)
+    await info_cat.create_text_channel("staff-commands", overwrites=staff_only_text)
+
+    # Otomatik Kurallar & Onay Mesajını Gönder
+    rules_embed = discord.Embed(
+        title="📜 Server Rules & Verification / Sunucu Kuralları",
+        description="1. Respect all members / Tüm üyelere saygılı olun.\n"
+                    "2. No spam or advertising / Spam ve reklam yasaktır.\n"
+                    "3. Follow Discord ToS / Discord kullanım şartlarına uyun.\n\n"
+                    "Aşağıdaki **Accept Rules** butonuna basarak tüm kanallara erişim sağlayabilirsiniz.",
+        color=discord.Color.gold()
+    )
+    await rules_ch.send(embed=rules_embed, view=RuleAcceptView())
 
     comm_cat = await guild.create_category("COMMUNITY")
-    await comm_cat.create_text_channel("general-chat")
-    await comm_cat.create_text_channel("media-share")
-    await comm_cat.create_text_channel("bot-commands")
+    await comm_cat.create_text_channel("general-chat", overwrites=gamer_access)
+    await comm_cat.create_text_channel("media-share", overwrites=gamer_access)
+    await comm_cat.create_text_channel("bot-commands", overwrites=gamer_access)
 
     supp_cat = await guild.create_category("SUPPORT & FEEDBACK")
-    await supp_cat.create_text_channel("bug-reports")
-    await supp_cat.create_text_channel("suggestions")
-    ticket_channel = await supp_cat.create_text_channel("create-ticket")
+    await supp_cat.create_text_channel("bug-reports", overwrites=gamer_access)
+    await supp_cat.create_text_channel("suggestions", overwrites=gamer_access)
+    ticket_channel = await supp_cat.create_text_channel("create-ticket", overwrites=gamer_access)
 
-    embed = discord.Embed(
+    ticket_embed = discord.Embed(
         title="🎮 Game Support System",
-        description="Sorunlarınız, yetkili iletişimleri veya özel bildirimleriniz için aşağıdan bilet oluşturun.\nClick below to open a support ticket.",
+        description="Sorunlarınız ve iletişim için bilet oluşturun / Click below to open a support ticket.",
         color=discord.Color.blue()
     )
-    await ticket_channel.send(embed=embed, view=TicketView())
+    await ticket_channel.send(embed=ticket_embed, view=TicketView())
 
     voice_cat = await guild.create_category("VOICE CHANNELS")
-    await voice_cat.create_voice_channel("Public Lounge")
-    await voice_cat.create_voice_channel("Squad 1")
-    await voice_cat.create_voice_channel("🔒 Admin Private Voice", overwrites=admin_only_voice)
+    await voice_cat.create_voice_channel("Public Lounge", overwrites=gamer_access)
+    await voice_cat.create_voice_channel("Squad 1", overwrites=gamer_access)
+    await voice_cat.create_voice_channel("🔒 Staff Voice", overwrites=staff_voice)
+    await voice_cat.create_voice_channel("🔒 Owner & Admin Voice", overwrites=owner_admin_voice)
 
-    succ_msg = "✅ Sunucu yapısı, gizli #logs kanalı ve tüm roller başarıyla kuruldu!" if lang == 'tr' else "✅ Server structure, secret #logs channel and all roles created successfully!"
+    succ_msg = "✅ İngilizce kanal yapısı, yetkili ses odaları ve kural kabul sistemi kuruldu!" if lang == 'tr' else "✅ English channels, staff voice rooms and rule verification system setup complete!"
     try:
         await interaction.followup.send(succ_msg, ephemeral=True)
     except Exception:
         pass
 
-# --- MODERASYON KOMUTLARI (ADMIN / OWNER KONTROLLÜ) ---
+# 2. /duyuru (ADMIN / OWNER)
+@bot.tree.command(name="duyuru", description="Duyurular kanalına görsel ve açıklamalı duyuru gönderir.")
+@app_commands.default_permissions(administrator=True)
+async def announce(interaction: discord.Interaction, title: str, message: str, image_url: str = None):
+    lang = get_lang(interaction.user.id)
+    if not is_admin_or_owner(interaction):
+        msg = "❌ Bu komutu sadece **Admin** veya **Owner** kullanabilir!" if lang == 'tr' else "❌ Only **Admin** or **Owner** can use this command!"
+        await interaction.response.send_message(msg, ephemeral=True)
+        return
 
+    ann_channel = discord.utils.get(interaction.guild.channels, name="announcements")
+    if not ann_channel:
+        await interaction.response.send_message("❌ `#announcements` kanalı bulunamadı.", ephemeral=True)
+        return
+
+    embed = discord.Embed(title=f"📢 {title}", description=message, color=discord.Color.gold())
+    if image_url:
+        embed.set_image(url=image_url)
+    embed.set_footer(text=f"Posted by {interaction.user.display_name}")
+
+    await ann_channel.send(content="@everyone", embed=embed)
+    await interaction.response.send_message("✅ Duyuru başarıyla gönderildi!", ephemeral=True)
+    await log_event(interaction.guild, "📢 Duyuru Paylaşıldı", f"**Başlık:** {title}\n**Yetkili:** {interaction.user.mention}", discord.Color.gold())
+
+# 3. /kurallar (ADMIN / OWNER)
+@bot.tree.command(name="kurallar", description="#rules kanalına kural mesajını ve onay butonunu yeniden yollar.")
+@app_commands.default_permissions(administrator=True)
+async def post_rules(interaction: discord.Interaction):
+    lang = get_lang(interaction.user.id)
+    if not is_admin_or_owner(interaction):
+        msg = "❌ Bu komutu sadece **Admin** veya **Owner** kullanabilir!" if lang == 'tr' else "❌ Only **Admin** or **Owner** can use this command!"
+        await interaction.response.send_message(msg, ephemeral=True)
+        return
+
+    rules_ch = discord.utils.get(interaction.guild.channels, name="rules")
+    if not rules_ch:
+        await interaction.response.send_message("❌ `#rules` kanalı bulunamadı.", ephemeral=True)
+        return
+
+    rules_embed = discord.Embed(
+        title="📜 Server Rules & Verification / Sunucu Kuralları",
+        description="1. Respect all members / Tüm üyelere saygılı olun.\n"
+                    "2. No spam or advertising / Spam ve reklam yasaktır.\n"
+                    "3. Follow Discord ToS / Discord kullanım şartlarına uyun.\n\n"
+                    "Aşağıdaki **Accept Rules** butonuna basarak tüm kanallara erişim sağlayabilirsiniz.",
+        color=discord.Color.gold()
+    )
+    await rules_ch.send(embed=rules_embed, view=RuleAcceptView())
+    await interaction.response.send_message("✅ Kural paneli gönderildi!", ephemeral=True)
+
+# 4. /ban (ADMIN / OWNER)
 @bot.tree.command(name="ban", description="Bir kullanıcıyı sunucudan yasaklar.")
-@app_commands.checks.has_permissions(ban_members=True)
+@app_commands.default_permissions(ban_members=True)
 async def ban_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
     lang = get_lang(interaction.user.id)
+    if not is_admin_or_owner(interaction):
+        await interaction.response.send_message("❌ Bu komut için **Admin** veya **Owner** olmalısınız!", ephemeral=True)
+        return
     await member.ban(reason=reason)
-    msg = f"🚫 {member.mention} sunucudan yasaklandı. Sebep: **{reason}**" if lang == 'tr' else f"🚫 {member.mention} has been banned. Reason: **{reason}**"
+    msg = f"🚫 {member.mention} sunucudan yasaklandı." if lang == 'tr' else f"🚫 {member.mention} has been banned."
     await interaction.response.send_message(msg, ephemeral=True)
     await log_event(interaction.guild, "🔨 Ban Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.red())
 
+# 5. /kick (ADMIN / OWNER)
 @bot.tree.command(name="kick", description="Bir kullanıcıyı sunucudan atar.")
-@app_commands.checks.has_permissions(kick_members=True)
+@app_commands.default_permissions(kick_members=True)
 async def kick_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
     lang = get_lang(interaction.user.id)
+    if not is_admin_or_owner(interaction):
+        await interaction.response.send_message("❌ Bu komut için **Admin** veya **Owner** olmalısınız!", ephemeral=True)
+        return
     await member.kick(reason=reason)
-    msg = f"👞 {member.mention} sunucudan atıldı. Sebep: **{reason}**" if lang == 'tr' else f"👞 {member.mention} has been kicked. Reason: **{reason}**"
+    msg = f"👞 {member.mention} sunucudan atıldı." if lang == 'tr' else f"👞 {member.mention} has been kicked."
     await interaction.response.send_message(msg, ephemeral=True)
     await log_event(interaction.guild, "👞 Kick Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.orange())
 
+# 6. /mute (MOD / ADMIN / OWNER)
 @bot.tree.command(name="mute", description="Bir kullanıcıyı belirli bir süre susturur (dakika).")
-@app_commands.checks.has_permissions(moderate_members=True)
+@app_commands.default_permissions(moderate_members=True)
 async def mute_user(interaction: discord.Interaction, member: discord.Member, minutes: int, reason: str = "Sebep belirtilmedi"):
     lang = get_lang(interaction.user.id)
+    if not is_staff(interaction):
+        await interaction.response.send_message("❌ Yetkiniz yetersiz!", ephemeral=True)
+        return
     duration = timedelta(minutes=minutes)
     await member.timeout(duration, reason=reason)
-    msg = f"🤐 {member.mention} **{minutes} dakika** boyunca susturuldu." if lang == 'tr' else f"🤐 {member.mention} has been muted for **{minutes} minutes**."
+    msg = f"🤐 {member.mention} **{minutes} dakika** boyunca susturuldu." if lang == 'tr' else f"🤐 {member.mention} muted for **{minutes} minutes**."
     await interaction.response.send_message(msg, ephemeral=True)
-    await log_event(interaction.guild, "🤐 Mute Event", f"**User:** {member.mention}\n**Duration:** {minutes} Min\n**Staff:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.gold())
+    await log_event(interaction.guild, "🤐 Mute Event", f"**User:** {member.mention}\n**Duration:** {minutes} Min\n**Staff:** {interaction.user.mention}", discord.Color.gold())
 
+# 7. /unmute (MOD / ADMIN / OWNER)
 @bot.tree.command(name="unmute", description="Bir kullanıcının susturmasını kaldırır.")
-@app_commands.checks.has_permissions(moderate_members=True)
+@app_commands.default_permissions(moderate_members=True)
 async def unmute_user(interaction: discord.Interaction, member: discord.Member):
     lang = get_lang(interaction.user.id)
+    if not is_staff(interaction):
+        await interaction.response.send_message("❌ Yetkiniz yetersiz!", ephemeral=True)
+        return
     await member.timeout(None)
-    msg = f"🔊 {member.mention} kullanıcısının susturması kaldırıldı." if lang == 'tr' else f"🔊 {member.mention} has been unmuted."
+    msg = f"🔊 {member.mention} kullanıcısının susturması kaldırıldı." if lang == 'tr' else f"🔊 {member.mention} unmuted."
     await interaction.response.send_message(msg, ephemeral=True)
     await log_event(interaction.guild, "🔊 Unmute Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}", discord.Color.green())
 
+# 8. /lock (MOD / ADMIN / OWNER)
 @bot.tree.command(name="lock", description="Komutun yazıldığı kanala mesaj gönderimini kilitler.")
-@app_commands.checks.has_permissions(manage_channels=True)
+@app_commands.default_permissions(manage_channels=True)
 async def lock_channel(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
+    if not is_staff(interaction):
+        await interaction.response.send_message("❌ Yetkiniz yetersiz!", ephemeral=True)
+        return
     channel = interaction.channel
     overwrite = channel.overwrites_for(interaction.guild.default_role)
     overwrite.send_messages = False
     await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
-    msg = "🔒 Bu kanal mesaj gönderimine kilitlendi." if lang == 'tr' else "🔒 This channel has been locked."
+    msg = "🔒 Bu kanal mesaj gönderimine kilitlendi." if lang == 'tr' else "🔒 Channel locked."
     await interaction.response.send_message(msg)
     await log_event(interaction.guild, "🔒 Lock Event", f"**Channel:** {channel.mention}\n**Staff:** {interaction.user.mention}", discord.Color.dark_red())
 
+# 9. /unlock (MOD / ADMIN / OWNER)
 @bot.tree.command(name="unlock", description="Kilitli kanalı tekrar mesaj gönderimine açar.")
-@app_commands.checks.has_permissions(manage_channels=True)
+@app_commands.default_permissions(manage_channels=True)
 async def unlock_channel(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
+    if not is_staff(interaction):
+        await interaction.response.send_message("❌ Yetkiniz yetersiz!", ephemeral=True)
+        return
     channel = interaction.channel
     overwrite = channel.overwrites_for(interaction.guild.default_role)
     overwrite.send_messages = None
     await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
-    msg = "🔓 Kanal kilidi açıldı." if lang == 'tr' else "🔓 Channel has been unlocked."
+    msg = "🔓 Kanal kilidi açıldı." if lang == 'tr' else "🔓 Channel unlocked."
     await interaction.response.send_message(msg)
     await log_event(interaction.guild, "🔓 Unlock Event", f"**Channel:** {channel.mention}\n**Staff:** {interaction.user.mention}", discord.Color.green())
 
+# 10. /sil (MOD / ADMIN / OWNER)
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı kanaldan siler.")
-@app_commands.checks.has_permissions(manage_messages=True)
+@app_commands.default_permissions(manage_messages=True)
 async def purge_messages(interaction: discord.Interaction, amount: int):
     lang = get_lang(interaction.user.id)
-    if amount < 1 or amount > 100:
-        err_msg = "❌ Lütfen 1 ile 100 arasında bir sayı girin." if lang == 'tr' else "❌ Please enter a number between 1 and 100."
-        await interaction.response.send_message(err_msg, ephemeral=True)
+    if not is_staff(interaction):
+        await interaction.response.send_message("❌ Yetkiniz yetersiz!", ephemeral=True)
         return
-
+    if amount < 1 or amount > 100:
+        await interaction.response.send_message("❌ Lütfen 1-100 arası bir sayı girin.", ephemeral=True)
+        return
     await interaction.response.defer(ephemeral=True)
     deleted = await interaction.channel.purge(limit=amount)
-    succ_msg = f"🗑️ **{len(deleted)}** adet mesaj silindi." if lang == 'tr' else f"🗑️ **{len(deleted)}** messages deleted."
-    await interaction.followup.send(succ_msg, ephemeral=True)
-    await log_event(interaction.guild, "🗑️ Mesaj Silindi (Purge)", f"**Kanal:** {interaction.channel.mention}\n**Silinen Adet:** {len(deleted)}\n**Yetkili:** {interaction.user.mention}", discord.Color.purple())
+    msg = f"🗑️ **{len(deleted)}** mesaj silindi." if lang == 'tr' else f"🗑️ **{len(deleted)}** messages deleted."
+    await interaction.followup.send(msg, ephemeral=True)
+    await log_event(interaction.guild, "🗑️ Purge Event", f"**Channel:** {interaction.channel.mention}\n**Count:** {len(deleted)}\n**Staff:** {interaction.user.mention}", discord.Color.purple())
 
-# Yetki Hataları Yönetimi (Moderatörlerin Admin Komutlarını Kullanmasını Engeller)
-@ban_user.error
-@kick_user.error
-@lock_channel.error
-@unlock_channel.error
-@purge_messages.error
-async def admin_perm_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    if isinstance(error, app_commands.MissingPermissions):
-        lang = get_lang(interaction.user.id)
-        msg = "❌ Bu komutu kullanmak için **Admin** veya **Owner** yetkisine sahip olmalısınız!" if lang == 'tr' else "❌ You need **Admin** or **Owner** permissions to use this command!"
-        await interaction.response.send_message(msg, ephemeral=True)
+# 11. /help (GAMER / HERKES)
+@bot.tree.command(name="help", description="Sunucu kullanım rehberi ve komut listesi.")
+async def help_command(interaction: discord.Interaction):
+    lang = get_lang(interaction.user.id)
+    if lang == 'en':
+        embed = discord.Embed(
+            title="🎮 Apexium Gamer Guide",
+            description="Welcome to the server! Here is a guide to get you started:",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="📜 1. Verification", value="Go to `#rules` and click **Accept Rules** to unlock all channels.", inline=False)
+        embed.add_field(name="🌐 2. Language", value="Type `/language` to switch between Turkish & English.", inline=False)
+        embed.add_field(name="📩 3. Support", value="Open a ticket in `#create-ticket` if you need help from staff.", inline=False)
+        embed.add_field(name="🏓 4. Commands", value="`/ping` - Check latency\n`/help` - Open this guide", inline=False)
+    else:
+        embed = discord.Embed(
+            title="🎮 Apexium Oyuncu Rehberi",
+            description="Sunucumuza hoş geldiniz! İşte başlangıç için kullanabileceğiniz rehber:",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="📜 1. Sunucu Kaydı", value="`#rules` kanalına gidip **Accept Rules** butonuna basarak tüm kanalları açın.", inline=False)
+        embed.add_field(name="🌐 2. Dil Seçimi", value="`/language` yazarak bot dilini Türkçe veya İngilizce yapabilirsiniz.", inline=False)
+        embed.add_field(name="📩 3. Destek & İletişim", value="Bir sorun yaşarsanız `#create-ticket` kanalından destek talebi açabilirsiniz.", inline=False)
+        embed.add_field(name="🏓 4. Kullanılabilir Komutlar", value="`/ping` - Bot gecikmesini ölçer\n`/help` - Bu rehber menüsünü açar", inline=False)
 
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# 12. Genel Komutlar
 @bot.tree.command(name="language", description="Select your language / Dilinizi seçin")
 async def language(interaction: discord.Interaction):
     await interaction.response.send_message("Lütfen dil seçin / Please select a language:", view=LanguageSelectView(), ephemeral=True)
@@ -343,10 +484,8 @@ async def language(interaction: discord.Interaction):
 async def ping(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
     ms = round(bot.latency * 1000)
-    if lang == 'en':
-        await interaction.response.send_message(f"🏓 Pong! Latency: **{ms}ms**", ephemeral=True)
-    else:
-        await interaction.response.send_message(f"🏓 Pong! Gecikme Süresi: **{ms}ms**", ephemeral=True)
+    msg = f"🏓 Pong! Latency: **{ms}ms**" if lang == 'en' else f"🏓 Pong! Gecikme Süresi: **{ms}ms**"
+    await interaction.response.send_message(msg, ephemeral=True)
 
 TOKEN = os.getenv("DISCORD_TOKEN") or "MTU0NDY5OTM3OTA5OTc3MDg5Mg.GLxPNK.zX5pectcQSndVdHhUNVGitM9V5GqD_kWGQ5L_0"
 
