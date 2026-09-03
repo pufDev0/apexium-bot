@@ -30,7 +30,10 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 user_languages = {}
 
-LOGO_URL = "https://raw.githubusercontent.com/pufDev0/apexium-bot/main/logo.png" # İsteğe bağlı GitHub asset linki veya doğrudan görsel URL'si
+# SİNEMATİK GÖRSEL URL'LERİ
+DEFAULT_ANNOUNCEMENT_BANNER = "https://raw.githubusercontent.com/pufDev0/apexium-bot/main/announcement_banner.jpg"
+DOWNLOAD_GAME_BANNER = "https://raw.githubusercontent.com/pufDev0/apexium-bot/main/download_banner.jpg"
+GAME_ITCH_LINK = "https://pufdev.itch.io/apexiumtrial"
 
 def get_lang(user_id):
     return user_languages.get(user_id, 'tr')
@@ -59,6 +62,11 @@ def is_staff(interaction: discord.Interaction) -> bool:
     return mod_role in interaction.user.roles if mod_role else False
 
 # --- ARAYÜZ (VIEWS) ---
+class DownloadGameView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(label="🚀 Play Apexium Trial (itch.io)", url=GAME_ITCH_LINK, style=discord.ButtonStyle.link))
+
 class RuleAcceptView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -159,6 +167,7 @@ async def on_ready():
     print(f'Bot {bot.user.name} olarak giriş yaptı!')
     bot.add_view(RuleAcceptView())
     bot.add_view(TicketView())
+    bot.add_view(DownloadGameView())
     try:
         for guild in bot.guilds:
             bot.tree.copy_global_to(guild=guild)
@@ -224,7 +233,7 @@ def create_rules_embed(guild: discord.Guild) -> discord.Embed:
 
 # --- KOMUTLAR ---
 
-# 1. /info (INFORMATION KOMUTU - GAMER & HERKES)
+# 1. /info (INFORMATION KOMUTU)
 @bot.tree.command(name="info", description="Apexium oyunu, geliştirici ve sunucu hakkında havalı bilgiler.")
 async def info_command(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
@@ -298,7 +307,7 @@ async def info_command(interaction: discord.Interaction):
     embed.set_footer(text="Apexium Studio • Developed by Berat Eşkiler", icon_url=bot.user.display_avatar.url)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# 2. /sunucukur (Sadece OWNER)
+# 2. /sunucukur (OWNER)
 @bot.tree.command(name="sunucukur", description="Var olan kanalları siler ve ultra havalı sunucu yapısını kurar.")
 @app_commands.default_permissions(administrator=True)
 async def setup_server(interaction: discord.Interaction):
@@ -374,12 +383,27 @@ async def setup_server(interaction: discord.Interaction):
     info_cat = await guild.create_category("INFORMATION")
     await info_cat.create_text_channel("welcome", overwrites=public_read_only)
     rules_ch = await info_cat.create_text_channel("rules", overwrites=public_read_only)
+    download_ch = await info_cat.create_text_channel("download-game", overwrites=public_read_only)
     await info_cat.create_text_channel("announcements", overwrites=public_read_only)
     await info_cat.create_text_channel("updates", overwrites=public_read_only)
     await info_cat.create_text_channel("logs", overwrites=staff_only_text)
     await info_cat.create_text_channel("staff-commands", overwrites=staff_only_text)
 
+    # Otomatik Kurallar
     await rules_ch.send(embed=create_rules_embed(guild), view=RuleAcceptView())
+
+    # Download Game Kanalı Paylaşımı
+    download_embed = discord.Embed(
+        title="🎮 DOWNLOAD APEXIUM: PARKOUR CHRONICLES",
+        description="**Apexium Trial** sürümünü aşağıdaki bağlantıdan hemen indirebilir ve maceraya atılabilirsiniz!\n"
+                    "Click below to download and play the official demo on itch.io.\n\n"
+                    f"🔗 **Direct Link / Doğrudan Bağlantı:**\n{GAME_ITCH_LINK}\n"
+                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        color=discord.Color.green()
+    )
+    download_embed.set_image(url=DOWNLOAD_GAME_BANNER)
+    download_embed.set_footer(text="Apexium Studio • Official itch.io Release", icon_url=bot.user.display_avatar.url)
+    await download_ch.send(embed=download_embed, view=DownloadGameView())
 
     comm_cat = await guild.create_category("COMMUNITY")
     await comm_cat.create_text_channel("general-chat", overwrites=gamer_access)
@@ -406,7 +430,7 @@ async def setup_server(interaction: discord.Interaction):
 
     embed_done = discord.Embed(
         title="🔥 Apexium Core System Online",
-        description="✅ İngilizce kanal yapısı, kural kabul paneli, /info komutu ve yetkili odaları başarıyla kuruldu!",
+        description="✅ `#download-game` kanalı, kural paneli, /info komutu ve yetkili odaları başarıyla kuruldu!",
         color=discord.Color.gold()
     )
     try:
@@ -415,7 +439,7 @@ async def setup_server(interaction: discord.Interaction):
         pass
 
 # 3. /duyuru (ADMIN / OWNER)
-@bot.tree.command(name="duyuru", description="Duyurular kanalına görsel ve açıklamalı ultra havalı duyuru gönderir.")
+@bot.tree.command(name="duyuru", description="Duyurular kanalına görsel ve açıklamalı sinematik duyuru gönderir.")
 @app_commands.default_permissions(administrator=True)
 async def announce(interaction: discord.Interaction, title: str, message: str, image_url: str = None):
     lang = get_lang(interaction.user.id)
@@ -442,15 +466,15 @@ async def announce(interaction: discord.Interaction, title: str, message: str, i
     else:
         embed.set_author(name=f"{guild.name} • OFFICIAL ANNOUNCEMENT")
 
-    if image_url:
-        embed.set_image(url=image_url)
+    final_image = image_url if image_url else DEFAULT_ANNOUNCEMENT_BANNER
+    embed.set_image(url=final_image)
 
     embed.set_footer(text=f"Announced by {interaction.user.display_name} • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", icon_url=interaction.user.display_avatar.url)
     embed.timestamp = datetime.utcnow()
 
     await ann_channel.send(content="@everyone", embed=embed)
     
-    confirm_embed = discord.Embed(title="✨ Success / Başarılı", description="📢 Duyuru `#announcements` kanalında başarıyla yayınlandı!", color=discord.Color.green())
+    confirm_embed = discord.Embed(title="✨ Success / Başarılı", description="📢 Duyuru `#announcements` kanalında sinematik banner ile yayınlandı!", color=discord.Color.green())
     await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
     await log_event(interaction.guild, "📢 Duyuru Paylaşıldı", f"**Başlık:** {title}\n**Yetkili:** {interaction.user.mention}", discord.Color.gold())
 
