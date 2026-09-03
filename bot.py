@@ -7,7 +7,7 @@ from datetime import timedelta, datetime, timezone
 from flask import Flask
 from threading import Thread
 
-# --- RENDER WEB SUNUCUSU ---
+# --- RENDER WEB SUNUCUSU (KESİNTİSİZ KEEP-ALIVE) ---
 app = Flask('')
 
 @app.route('/')
@@ -20,7 +20,11 @@ def run_web():
 
 def keep_alive():
     t = Thread(target=run_web)
+    t.daemon = True
     t.start()
+
+# Flask sunucusunu hemen arka planda başlatıyoruz
+keep_alive()
 
 # --- DISCORD BOT AYARLARI ---
 intents = discord.Intents.default()
@@ -425,13 +429,11 @@ async def setup_server(interaction: discord.Interaction):
     )
     mod_role = discord.utils.get(guild.roles, name="🛡️ Moderator") or await guild.create_role(name="🛡️ Moderator", permissions=mod_perms, color=discord.Color.blue(), hoist=True)
 
-    # LEVEL ROLLERİ
     l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=discord.Permissions.general(), color=discord.Color.green(), hoist=True)
     await guild.create_role(name="⚡ Level 2 Gamer", permissions=discord.Permissions.general(), color=discord.Color.blue(), hoist=True)
     await guild.create_role(name="🔥 Level 3 Gamer", permissions=discord.Permissions.general(), color=discord.Color.purple(), hoist=True)
     await guild.create_role(name="👑 Master Gamer", permissions=discord.Permissions.general(), color=discord.Color.gold(), hoist=True)
 
-    # ÜLKE ROLLERİ
     for country in ["🇹🇷 Turkey", "🇬🇧 United Kingdom", "🇺🇸 United States", "🇩🇪 Germany", "🇫🇷 France", "🇪🇸 Spain"]:
         if not discord.utils.get(guild.roles, name=country):
             await guild.create_role(name=country, color=discord.Color.dark_teal())
@@ -446,12 +448,10 @@ async def setup_server(interaction: discord.Interaction):
         l1_gamer: discord.PermissionOverwrite(send_messages=False, read_messages=True)
     }
 
-    # COMMUNITY & FEEDBACK KANALLARINA HER ROLÜN YAZMA İZNİ
     all_can_write = {
         guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
     }
 
-    # CREATE TICKET KANALINDA SADECE YETKİLİLER SOHBET EDEBİLİR (Kullanıcılar butona basar)
     create_ticket_perms = {
         guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False),
         owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
@@ -494,7 +494,6 @@ async def setup_server(interaction: discord.Interaction):
     await info_cat.create_text_channel("logs", overwrites=logs_only_admin)
     await info_cat.create_text_channel("staff-commands", overwrites=staff_only_text)
 
-    # Welcome
     welcome_embed = discord.Embed(
         title="🌐 SELECT YOUR COUNTRY / ÜLKENİZİ SEÇİN",
         description="Sunucu kanallarına erişmek için lütfen aşağıdaki menüden ülkenizi seçin.\n\nPlease select your country from the menu below to unlock channels.",
@@ -502,10 +501,8 @@ async def setup_server(interaction: discord.Interaction):
     )
     await welcome_ch.send(embed=welcome_embed, view=CountrySelectView())
 
-    # Rules
     await rules_ch.send(embed=create_rules_embed(guild), view=RuleAcceptView())
 
-    # Download Game
     download_embed = discord.Embed(
         title="🎮 DOWNLOAD APEXIUM: PARKOUR CHRONICLES",
         description="**Apexium Trial** sürümünü aşağıdaki bağlantıdan hemen indirebilir ve maceraya atılabilirsiniz!\n"
@@ -518,13 +515,11 @@ async def setup_server(interaction: discord.Interaction):
     download_embed.set_footer(text="Apexium Studio • Official itch.io Release", icon_url=bot.user.display_avatar.url)
     await download_ch.send(embed=download_embed, view=DownloadGameView())
 
-    # COMMUNITY (HER ROL YAZABİLİR)
     comm_cat = await guild.create_category("COMMUNITY")
     await comm_cat.create_text_channel("general-chat", overwrites=all_can_write)
     await comm_cat.create_text_channel("media-share", overwrites=all_can_write)
     await comm_cat.create_text_channel("bot-commands", overwrites=all_can_write)
 
-    # SUPPORT & FEEDBACK (YAZILABİLİR, TICKET KANALI HARİÇ)
     supp_cat = await guild.create_category("SUPPORT & FEEDBACK")
     await supp_cat.create_text_channel("bug-reports", overwrites=all_can_write)
     await supp_cat.create_text_channel("suggestions", overwrites=all_can_write)
@@ -763,5 +758,4 @@ async def ping(interaction: discord.Interaction):
 
 TOKEN = os.getenv("DISCORD_TOKEN") or "MTU0NDY5OTM3OTA5OTc3MDg5Mg.GLxPNK.zX5pectcQSndVdHhUNVGitM9V5GqD_kWGQ5L_0"
 
-keep_alive()
 bot.run(TOKEN)
