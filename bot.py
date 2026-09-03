@@ -30,7 +30,6 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 user_languages = {}
 
-# SİNEMATİK GÖRSEL URL'LERİ
 DEFAULT_ANNOUNCEMENT_BANNER = "https://raw.githubusercontent.com/pufDev0/apexium-bot/main/announcement_banner.jpg"
 DOWNLOAD_GAME_BANNER = "https://raw.githubusercontent.com/pufDev0/apexium-bot/main/download_banner.jpg"
 GAME_ITCH_LINK = "https://pufdev.itch.io/apexiumtrial"
@@ -231,9 +230,9 @@ def create_rules_embed(guild: discord.Guild) -> discord.Embed:
     embed.set_footer(text="Apexium Security System • Rules Enforcement", icon_url=bot.user.display_avatar.url)
     return embed
 
-# --- KOMUTLAR ---
+# --- KOMUTLAR (Sıkı Görünürlük Bayrakları ile) ---
 
-# 1. /info (INFORMATION KOMUTU)
+# 1. /info (HERKES)
 @bot.tree.command(name="info", description="Apexium oyunu, geliştirici ve sunucu hakkında havalı bilgiler.")
 async def info_command(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
@@ -307,7 +306,7 @@ async def info_command(interaction: discord.Interaction):
     embed.set_footer(text="Apexium Studio • Developed by Berat Eşkiler", icon_url=bot.user.display_avatar.url)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# 2. /sunucukur (OWNER)
+# 2. /sunucukur (SADECE OWNER GÖREBİLİR VE KULLANABİLİR)
 @bot.tree.command(name="sunucukur", description="Var olan kanalları siler ve ultra havalı sunucu yapısını kurar.")
 @app_commands.default_permissions(administrator=True)
 async def setup_server(interaction: discord.Interaction):
@@ -389,10 +388,8 @@ async def setup_server(interaction: discord.Interaction):
     await info_cat.create_text_channel("logs", overwrites=staff_only_text)
     await info_cat.create_text_channel("staff-commands", overwrites=staff_only_text)
 
-    # Otomatik Kurallar
     await rules_ch.send(embed=create_rules_embed(guild), view=RuleAcceptView())
 
-    # Download Game Kanalı Paylaşımı
     download_embed = discord.Embed(
         title="🎮 DOWNLOAD APEXIUM: PARKOUR CHRONICLES",
         description="**Apexium Trial** sürümünü aşağıdaki bağlantıdan hemen indirebilir ve maceraya atılabilirsiniz!\n"
@@ -438,7 +435,7 @@ async def setup_server(interaction: discord.Interaction):
     except Exception:
         pass
 
-# 3. /duyuru (ADMIN / OWNER)
+# 3. /duyuru (ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="duyuru", description="Duyurular kanalına görsel ve açıklamalı sinematik duyuru gönderir.")
 @app_commands.default_permissions(administrator=True)
 async def announce(interaction: discord.Interaction, title: str, message: str, image_url: str = None):
@@ -478,7 +475,7 @@ async def announce(interaction: discord.Interaction, title: str, message: str, i
     await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
     await log_event(interaction.guild, "📢 Duyuru Paylaşıldı", f"**Başlık:** {title}\n**Yetkili:** {interaction.user.mention}", discord.Color.gold())
 
-# 4. /kurallar (ADMIN / OWNER)
+# 4. /kurallar (ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="kurallar", description="#rules kanalına kural mesajını ve onay butonunu yeniden yollar.")
 @app_commands.default_permissions(administrator=True)
 async def post_rules(interaction: discord.Interaction):
@@ -497,7 +494,7 @@ async def post_rules(interaction: discord.Interaction):
     embed_ok = discord.Embed(title="✅ Kurallar Gönderildi", description="Kural paneli `#rules` kanalında başarıyla güncellendi.", color=discord.Color.green())
     await interaction.response.send_message(embed=embed_ok, ephemeral=True)
 
-# 5. /ban (ADMIN / OWNER)
+# 5. /ban (ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="ban", description="Bir kullanıcıyı sunucudan yasaklar.")
 @app_commands.default_permissions(ban_members=True)
 async def ban_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
@@ -510,7 +507,7 @@ async def ban_user(interaction: discord.Interaction, member: discord.Member, rea
     await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🔨 Ban Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.red())
 
-# 6. /kick (ADMIN / OWNER)
+# 6. /kick (ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="kick", description="Bir kullanıcıyı sunucudan atar.")
 @app_commands.default_permissions(kick_members=True)
 async def kick_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
@@ -523,7 +520,7 @@ async def kick_user(interaction: discord.Interaction, member: discord.Member, re
     await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "👞 Kick Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.orange())
 
-# 7. /mute (MOD / ADMIN / OWNER)
+# 7. /mute (MODERATOR / ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="mute", description="Bir kullanıcıyı belirli bir süre susturur (dakika).")
 @app_commands.default_permissions(moderate_members=True)
 async def mute_user(interaction: discord.Interaction, member: discord.Member, minutes: int, reason: str = "Sebep belirtilmedi"):
@@ -537,7 +534,7 @@ async def mute_user(interaction: discord.Interaction, member: discord.Member, mi
     await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🤐 Mute Event", f"**User:** {member.mention}\n**Duration:** {minutes} Min\n**Staff:** {interaction.user.mention}", discord.Color.gold())
 
-# 8. /unmute (MOD / ADMIN / OWNER)
+# 8. /unmute (MODERATOR / ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="unmute", description="Bir kullanıcının susturmasını kaldırır.")
 @app_commands.default_permissions(moderate_members=True)
 async def unmute_user(interaction: discord.Interaction, member: discord.Member):
@@ -550,7 +547,7 @@ async def unmute_user(interaction: discord.Interaction, member: discord.Member):
     await interaction.response.send_message(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🔊 Unmute Event", f"**User:** {member.mention}\n**Staff:** {interaction.user.mention}", discord.Color.green())
 
-# 9. /lock (MOD / ADMIN / OWNER)
+# 9. /lock (MODERATOR / ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="lock", description="Komutun yazıldığı kanala mesaj gönderimini kilitler.")
 @app_commands.default_permissions(manage_channels=True)
 async def lock_channel(interaction: discord.Interaction):
@@ -566,7 +563,7 @@ async def lock_channel(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
     await log_event(interaction.guild, "🔒 Lock Event", f"**Channel:** {channel.mention}\n**Staff:** {interaction.user.mention}", discord.Color.dark_red())
 
-# 10. /unlock (MOD / ADMIN / OWNER)
+# 10. /unlock (MODERATOR / ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="unlock", description="Kilitli kanalı tekrar mesaj gönderimine açar.")
 @app_commands.default_permissions(manage_channels=True)
 async def unlock_channel(interaction: discord.Interaction):
@@ -582,7 +579,7 @@ async def unlock_channel(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
     await log_event(interaction.guild, "🔓 Unlock Event", f"**Channel:** {channel.mention}\n**Staff:** {interaction.user.mention}", discord.Color.green())
 
-# 11. /sil (MOD / ADMIN / OWNER)
+# 11. /sil (MODERATOR / ADMIN / OWNER GÖREBİLİR)
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı kanaldan siler.")
 @app_commands.default_permissions(manage_messages=True)
 async def purge_messages(interaction: discord.Interaction, amount: int):
@@ -599,7 +596,7 @@ async def purge_messages(interaction: discord.Interaction, amount: int):
     await interaction.followup.send(embed=embed, ephemeral=True)
     await log_event(interaction.guild, "🗑️ Purge Event", f"**Channel:** {interaction.channel.mention}\n**Count:** {len(deleted)}\n**Staff:** {interaction.user.mention}", discord.Color.purple())
 
-# 12. /help (GAMER / HERKES)
+# 12. /help (HERKES)
 @bot.tree.command(name="help", description="Sunucu kullanım rehberi ve komut listesi.")
 async def help_command(interaction: discord.Interaction):
     lang = get_lang(interaction.user.id)
