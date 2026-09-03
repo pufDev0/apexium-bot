@@ -23,7 +23,6 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# Flask sunucusunu hemen arka planda başlatıyoruz
 keep_alive()
 
 # --- DISCORD BOT AYARLARI ---
@@ -216,7 +215,7 @@ async def check_member_levels():
                 if l1_role in member.roles: await member.remove_roles(l1_role)
                 await log_event(guild, "⚡ Level Up! (Level 2)", f"**Kullanıcı:** {member.mention}\n**Sunucuda Süre:** {days} Gün", discord.Color.blue())
 
-# --- BOT ETKİNLİKLERİ ---
+# --- BOT ETKİNLİKLERİ & GÜVENLİK ---
 @bot.event
 async def on_ready():
     print(f'Bot {bot.user.name} olarak giriş yaptı!')
@@ -232,6 +231,33 @@ async def on_ready():
         print("✅ Slash komutları ve Otomatik Level sistemi yüklendi!")
     except Exception as e:
         print(f"Hata: {e}")
+
+# İzinsiz Rol Değişikliği Güvenlik Denetimi
+@bot.event
+async def on_member_update(before, after):
+    guild = after.guild
+    if before.roles != after.roles:
+        added = [r for r in after.roles if r not in before.roles]
+        removed = [r for r in before.roles if r not in before.roles]
+        
+        # Eğer bir kullanıcı yetkisiz şekilde kendine/başkasına Admin/Owner/Dev vermeye çalışırsa engelle ve logla
+        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.member_role_update):
+            executor = entry.user
+            if executor and not executor.bot and executor.id != guild.owner_id:
+                admin_role = discord.utils.get(guild.roles, name="🛠️ Admin")
+                is_executor_admin = admin_role in executor.roles if admin_role else False
+                
+                # Admin veya Owner harici kimse rol değiştiremez
+                if not is_executor_admin:
+                    for role in added:
+                        await after.remove_roles(role)
+                    await log_event(guild, "🚨 YETKİSİZ ROL DEĞİŞİKLİĞİ ENGELLENDİ", f"**İşlemi Yapan:** {executor.mention}\n**Hedef Üye:** {after.mention}\n**Engellenen Rol:** {', '.join([r.name for r in added])}", discord.Color.red())
+                    return
+
+        desc = f"**Üye:** {after.mention}\n"
+        if added: desc += f"**Eklendi:** {', '.join([r.mention for r in added])}\n"
+        if removed: desc += f"**Kaldırıldı:** {', '.join([r.mention for r in removed])}"
+        await log_event(guild, "🛡️ Rol / Yetki Değişti", desc, discord.Color.gold())
 
 @bot.event
 async def on_member_join(member):
@@ -266,16 +292,6 @@ async def on_message_edit(before, after):
     if before.author.bot or not before.guild or before.content == after.content:
         return
     await log_event(before.guild, "✏️ Mesaj Düzenlendi", f"**Yazar:** {before.author.mention}\n**Kanal:** {before.channel.mention}\n**Önce:** {before.content}\n**Sonra:** {after.content}", discord.Color.orange())
-
-@bot.event
-async def on_member_update(before, after):
-    if before.roles != after.roles:
-        added = [r.mention for r in after.roles if r not in before.roles]
-        removed = [r.mention for r in before.roles if r not in after.roles]
-        desc = f"**Üye:** {after.mention}\n"
-        if added: desc += f"**Eklendi:** {', '.join(added)}\n"
-        if removed: desc += f"**Kaldırıldı:** {', '.join(removed)}"
-        await log_event(after.guild, "🛡️ Rol / Yetki Değişti", desc, discord.Color.gold())
 
 @bot.event
 async def on_invite_create(invite):
@@ -423,16 +439,20 @@ async def setup_server(interaction: discord.Interaction):
     )
     admin_role = discord.utils.get(guild.roles, name="🛠️ Admin") or await guild.create_role(name="🛠️ Admin", permissions=admin_perms, color=discord.Color.red(), hoist=True)
 
+    # MODERATÖR VE ALT ROLLERDE 'MANAGE ROLES' KESİNLİKLE KAPALI (False)
     mod_perms = discord.Permissions(
         manage_messages=True, mute_members=True, deafen_members=True,
-        read_messages=True, send_messages=True, connect=True, speak=True
+        read_messages=True, send_messages=True, connect=True, speak=True, manage_roles=False
     )
     mod_role = discord.utils.get(guild.roles, name="🛡️ Moderator") or await guild.create_role(name="🛡️ Moderator", permissions=mod_perms, color=discord.Color.blue(), hoist=True)
 
-    l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=discord.Permissions.general(), color=discord.Color.green(), hoist=True)
-    await guild.create_role(name="⚡ Level 2 Gamer", permissions=discord.Permissions.general(), color=discord.Color.blue(), hoist=True)
-    await guild.create_role(name="🔥 Level 3 Gamer", permissions=discord.Permissions.general(), color=discord.Color.purple(), hoist=True)
-    await guild.create_role(name="👑 Master Gamer", permissions=discord.Permissions.general(), color=discord.Color.gold(), hoist=True)
+    gamer_perms = discord.Permissions(
+        read_messages=True, send_messages=True, connect=True, speak=True, manage_roles=False, manage_guild=False
+    )
+    l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=gamer_perms, color=discord.Color.green(), hoist=True)
+    await guild.create_role(name="⚡ Level 2 Gamer", permissions=gamer_perms, color=discord.Color.blue(), hoist=True)
+    await guild.create_role(name="🔥 Level 3 Gamer", permissions=gamer_perms, color=discord.Color.purple(), hoist=True)
+    await guild.create_role(name="👑 Master Gamer", permissions=gamer_perms, color=discord.Color.gold(), hoist=True)
 
     for country in ["🇹🇷 Turkey", "🇬🇧 United Kingdom", "🇺🇸 United States", "🇩🇪 Germany", "🇫🇷 France", "🇪🇸 Spain"]:
         if not discord.utils.get(guild.roles, name=country):
@@ -541,7 +561,7 @@ async def setup_server(interaction: discord.Interaction):
 
     embed_done = discord.Embed(
         title="🔥 Apexium Core System Online",
-        description="✅ Developer rolü, her role açık sohbet/destek kanalları ve bilet paneli başarıyla kuruldu!",
+        description="✅ Rol güvenlik kilitleri, Developer rolü ve kanal yapısı kuruldu!",
         color=discord.Color.gold()
     )
     try:
