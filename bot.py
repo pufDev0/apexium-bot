@@ -103,7 +103,7 @@ class CountrySelectView(discord.ui.View):
         if gamer_l1 and gamer_l1 not in member.roles:
             await member.add_roles(gamer_l1)
 
-        msg = f"✅ **{role_name}** rolü tanımlandı! Access granted." if val == 'TR' else f"✅ Assigned **{role_name}** role! Access granted."
+        msg = f"✅ **{role_name}** rolü tanımlandı!" if val == 'TR' else f"✅ Assigned **{role_name}** role!"
         await interaction.response.send_message(msg, ephemeral=True)
         await log_event(guild, "🌐 Ülke/Dil Seçildi", f"**Üye:** {member.mention}\n**Ülke:** {role_name}", discord.Color.blue())
 
@@ -115,16 +115,16 @@ class RuleAcceptView(discord.ui.View):
     async def accept_rules(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild = interaction.guild
         member = interaction.user
-        gamer_role = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer")
+        gamer_l1 = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer")
         
-        if gamer_role:
-            if gamer_role in member.roles:
+        if gamer_l1:
+            if gamer_l1 in member.roles:
                 await interaction.response.send_message("✨ Zaten kuralları kabul ettiniz! / You have already accepted the rules!", ephemeral=True)
             else:
-                await member.add_roles(gamer_role)
+                await member.add_roles(gamer_l1)
                 embed = discord.Embed(
                     title="🎉 Access Granted / Erişim Onaylandı!",
-                    description="Kuralları kabul ettiğin için teşekkürler! Lütfen `#welcome` kanalından ülkeni seç.\n\nThank you for accepting the rules! Please select your country in `#welcome`.",
+                    description="Kuralları kabul ettiğin için teşekkürler! **Level 1 Gamer** rolü tanımlandı.",
                     color=discord.Color.brand_green()
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -199,23 +199,20 @@ async def check_member_levels():
             
             days = (now - member.joined_at).days
 
-            # 1 Yıl
             if days >= 365 and master_role and master_role not in member.roles:
                 await member.add_roles(master_role)
                 if l3_role in member.roles: await member.remove_roles(l3_role)
                 await log_event(guild, "👑 Level Up! (Master Gamer)", f"**Kullanıcı:** {member.mention}\n**Sunucuda Süre:** {days} Gün", discord.Color.gold())
-            # 1 Ay (30 gün)
             elif days >= 30 and days < 365 and l3_role and l3_role not in member.roles:
                 await member.add_roles(l3_role)
                 if l2_role in member.roles: await member.remove_roles(l2_role)
                 await log_event(guild, "🔥 Level Up! (Level 3)", f"**Kullanıcı:** {member.mention}\n**Sunucuda Süre:** {days} Gün", discord.Color.purple())
-            # 1 Hafta (7 gün)
             elif days >= 7 and days < 30 and l2_role and l2_role not in member.roles:
                 await member.add_roles(l2_role)
                 if l1_role in member.roles: await member.remove_roles(l1_role)
                 await log_event(guild, "⚡ Level Up! (Level 2)", f"**Kullanıcı:** {member.mention}\n**Sunucuda Süre:** {days} Gün", discord.Color.blue())
 
-# --- BOT ETKİNLİKLERİ VE DETAYLI LOGLAR ---
+# --- BOT ETKİNLİKLERİ ---
 @bot.event
 async def on_ready():
     print(f'Bot {bot.user.name} olarak giriş yaptı!')
@@ -247,7 +244,7 @@ async def on_member_join(member):
         embed.set_image(url=member.display_avatar.url)
         await welcome_channel.send(embed=embed, view=CountrySelectView())
     
-    await log_event(guild, "📥 Üye Katıldı", f"**Üye:** {member.mention} ({member.tag})\n**Hesap Oluşturulma:** {member.created_at.strftime('%d.%m.%Y')}", discord.Color.blue())
+    await log_event(guild, "📥 Üye Katıldı", f"**Üye:** {member.mention} ({member.tag})", discord.Color.blue())
 
 @bot.event
 async def on_member_remove(member):
@@ -414,6 +411,7 @@ async def setup_server(interaction: discord.Interaction):
             pass
 
     owner_role = discord.utils.get(guild.roles, name="👑 Owner") or await guild.create_role(name="👑 Owner", permissions=discord.Permissions.all(), color=discord.Color.gold(), hoist=True)
+    dev_role = discord.utils.get(guild.roles, name="👑 Developer") or await guild.create_role(name="👑 Developer", permissions=discord.Permissions.all(), color=discord.Color.teal(), hoist=True)
     
     admin_perms = discord.Permissions(
         manage_channels=True, manage_roles=True, kick_members=True, ban_members=True,
@@ -427,7 +425,7 @@ async def setup_server(interaction: discord.Interaction):
     )
     mod_role = discord.utils.get(guild.roles, name="🛡️ Moderator") or await guild.create_role(name="🛡️ Moderator", permissions=mod_perms, color=discord.Color.blue(), hoist=True)
 
-    # İNGİLİZCE GAMER LEVEL ROLLERİ
+    # LEVEL ROLLERİ
     l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=discord.Permissions.general(), color=discord.Color.green(), hoist=True)
     await guild.create_role(name="⚡ Level 2 Gamer", permissions=discord.Permissions.general(), color=discord.Color.blue(), hoist=True)
     await guild.create_role(name="🔥 Level 3 Gamer", permissions=discord.Permissions.general(), color=discord.Color.purple(), hoist=True)
@@ -439,7 +437,7 @@ async def setup_server(interaction: discord.Interaction):
             await guild.create_role(name=country, color=discord.Color.dark_teal())
 
     try:
-        await interaction.user.add_roles(owner_role)
+        await interaction.user.add_roles(owner_role, dev_role)
     except Exception:
         pass
 
@@ -448,12 +446,18 @@ async def setup_server(interaction: discord.Interaction):
         l1_gamer: discord.PermissionOverwrite(send_messages=False, read_messages=True)
     }
 
-    gamer_access = {
-        guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    # COMMUNITY & FEEDBACK KANALLARINA HER ROLÜN YAZMA İZNİ
+    all_can_write = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
     }
 
-    # MODERATÖRLER LOGS KANALINI GÖREMEZ (Sadece Owner & Admin)
+    # CREATE TICKET KANALINDA SADECE YETKİLİLER SOHBET EDEBİLİR (Kullanıcılar butona basar)
+    create_ticket_perms = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False),
+        owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+
     logs_only_admin = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         mod_role: discord.PermissionOverwrite(read_messages=False),
@@ -490,7 +494,7 @@ async def setup_server(interaction: discord.Interaction):
     await info_cat.create_text_channel("logs", overwrites=logs_only_admin)
     await info_cat.create_text_channel("staff-commands", overwrites=staff_only_text)
 
-    # Welcome Ülke/Dil Seçim Paneli
+    # Welcome
     welcome_embed = discord.Embed(
         title="🌐 SELECT YOUR COUNTRY / ÜLKENİZİ SEÇİN",
         description="Sunucu kanallarına erişmek için lütfen aşağıdaki menüden ülkenizi seçin.\n\nPlease select your country from the menu below to unlock channels.",
@@ -514,17 +518,18 @@ async def setup_server(interaction: discord.Interaction):
     download_embed.set_footer(text="Apexium Studio • Official itch.io Release", icon_url=bot.user.display_avatar.url)
     await download_ch.send(embed=download_embed, view=DownloadGameView())
 
+    # COMMUNITY (HER ROL YAZABİLİR)
     comm_cat = await guild.create_category("COMMUNITY")
-    await comm_cat.create_text_channel("general-chat", overwrites=gamer_access)
-    await comm_cat.create_text_channel("media-share", overwrites=gamer_access)
-    await comm_cat.create_text_channel("bot-commands", overwrites=gamer_access)
+    await comm_cat.create_text_channel("general-chat", overwrites=all_can_write)
+    await comm_cat.create_text_channel("media-share", overwrites=all_can_write)
+    await comm_cat.create_text_channel("bot-commands", overwrites=all_can_write)
 
+    # SUPPORT & FEEDBACK (YAZILABİLİR, TICKET KANALI HARİÇ)
     supp_cat = await guild.create_category("SUPPORT & FEEDBACK")
-    await supp_cat.create_text_channel("bug-reports", overwrites=gamer_access)
-    await supp_cat.create_text_channel("suggestions", overwrites=gamer_access)
-    ticket_channel = await supp_cat.create_text_channel("create-ticket", overwrites=gamer_access)
+    await supp_cat.create_text_channel("bug-reports", overwrites=all_can_write)
+    await supp_cat.create_text_channel("suggestions", overwrites=all_can_write)
+    ticket_channel = await supp_cat.create_text_channel("create-ticket", overwrites=create_ticket_perms)
 
-    # Create Ticket Kanalı Banner Güncellemesi
     ticket_embed = discord.Embed(
         title="🎫 APEXIUM OFFICIAL SUPPORT SYSTEM",
         description="Sorunlarınız ve yetkili iletişimi için bilet oluşturun / Click below to open a support ticket.",
@@ -534,14 +539,14 @@ async def setup_server(interaction: discord.Interaction):
     await ticket_channel.send(embed=ticket_embed, view=TicketView())
 
     voice_cat = await guild.create_category("VOICE CHANNELS")
-    await voice_cat.create_voice_channel("Public Lounge", overwrites=gamer_access)
-    await voice_cat.create_voice_channel("Squad 1", overwrites=gamer_access)
+    await voice_cat.create_voice_channel("Public Lounge", overwrites=all_can_write)
+    await voice_cat.create_voice_channel("Squad 1", overwrites=all_can_write)
     await voice_cat.create_voice_channel("🔒 Staff Voice", overwrites=staff_voice)
     await voice_cat.create_voice_channel("🔒 Owner & Admin Voice", overwrites=owner_admin_voice)
 
     embed_done = discord.Embed(
         title="🔥 Apexium Core System Online",
-        description="✅ Ülke rolleri, Gamer seviye sistemi, gizli loglar ve sinematik bilet kanalı başarıyla kuruldu!",
+        description="✅ Developer rolü, her role açık sohbet/destek kanalları ve bilet paneli başarıyla kuruldu!",
         color=discord.Color.gold()
     )
     try:
