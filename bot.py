@@ -97,7 +97,8 @@ class CountrySelectView(discord.ui.View):
         }
         
         role_name = country_roles.get(val, "🇹🇷 Turkey")
-        role = discord.utils.get(guild.roles, name=role_name) or await guild.create_role(name=role_name, color=discord.Color.dark_teal())
+        # hoist=False yapılarak üye listesinde ayrı gösterilmesi engellendi (gizli rol yapıldı)
+        role = discord.utils.get(guild.roles, name=role_name) or await guild.create_role(name=role_name, color=discord.Color.dark_teal(), hoist=False)
         
         user_languages[member.id] = 'tr' if val == 'TR' else 'en'
         await member.add_roles(role)
@@ -107,7 +108,7 @@ class CountrySelectView(discord.ui.View):
 
         msg = (
             f"✅ **{role_name}** bölgesi seçildi!\n"
-            f"👉 Şimdi {rules_mention} kanalına giderek sunucu kurallarını onaylayın ve tüm sunucuya erişim kazanın."
+            f"👉 Şimdi {rules_mention} kanalına giderek sunucu kurallarını onaylayın ve erişim kazanın."
             if val == 'TR' else
             f"✅ Assigned **{role_name}** sector!\n"
             f"👉 Now proceed to {rules_mention} to accept rules and unlock full server access."
@@ -167,11 +168,11 @@ class TicketView(discord.ui.View):
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, read_message_history=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
-        if admin_role: overwrites[admin_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-        if mod_role: overwrites[mod_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        if admin_role: overwrites[admin_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
+        if mod_role: overwrites[mod_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
 
         ticket_channel = await guild.create_text_channel(name=f"ticket-{user.name}", overwrites=overwrites)
         res_msg = "Özel destek kanalınız bağlandı: " if lang == 'tr' else "Secure ticket terminal initialized: "
@@ -415,11 +416,11 @@ async def setup_server(interaction: discord.Interaction):
             try: await role.delete()
             except Exception: pass
 
-    # @everyone İZİNLERİ (Sadece okuyabilir, kanal seçebilir)
+    # @everyone İZİNLERİ (Sadece okuyabilir, geçmişi görebilir)
     try:
         everyone_perms = discord.Permissions(
             read_messages=True, send_messages=False, connect=False, speak=False,
-            manage_roles=False, manage_channels=False, manage_guild=False, administrator=False
+            read_message_history=True, manage_roles=False, manage_channels=False, manage_guild=False, administrator=False
         )
         await guild.default_role.edit(permissions=everyone_perms)
     except Exception: pass
@@ -434,60 +435,61 @@ async def setup_server(interaction: discord.Interaction):
     mod_perms = discord.Permissions(manage_messages=True, mute_members=True, deafen_members=True, read_messages=True, send_messages=True, connect=True, speak=True, manage_roles=False)
     mod_role = discord.utils.get(guild.roles, name="🛡️ Moderator") or await guild.create_role(name="🛡️ Moderator", permissions=mod_perms, color=discord.Color.blue(), hoist=True)
 
-    gamer_perms = discord.Permissions(read_messages=True, send_messages=True, connect=True, speak=True, manage_roles=False, manage_guild=False)
+    gamer_perms = discord.Permissions(read_messages=True, send_messages=True, connect=True, speak=True, read_message_history=True, manage_roles=False, manage_guild=False)
     
     await guild.create_role(name="👑 Master Gamer", permissions=gamer_perms, color=discord.Color.gold(), hoist=True)
     await guild.create_role(name="🔥 Level 3 Gamer", permissions=gamer_perms, color=discord.Color.purple(), hoist=True)
     await guild.create_role(name="⚡ Level 2 Gamer", permissions=gamer_perms, color=discord.Color.blue(), hoist=True)
     l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=gamer_perms, color=discord.Color.green(), hoist=True)
 
+    # ÜLKE ROLLERİ (hoist=False yapılarak gizli yetki rolü yapıldı)
     for country in ["🇹🇷 Turkey", "🇬🇧 United Kingdom", "🇺🇸 United States", "🇩🇪 Germany", "🇫🇷 France", "🇪🇸 Spain"]:
         if not discord.utils.get(guild.roles, name=country):
-            await guild.create_role(name=country, permissions=gamer_perms, color=discord.Color.dark_teal())
+            await guild.create_role(name=country, permissions=gamer_perms, color=discord.Color.dark_teal(), hoist=False)
 
     try: await interaction.user.add_roles(owner_role, dev_role)
     except Exception: pass
 
     # --- KANAL İZİN MİMARİSİ ---
 
-    # WELCOME VE RULES: Herkes görebilir ama mesaj yazamaz
+    # WELCOME VE RULES: Herkes görebilir ve geçmişi okuyabilir ama mesaj yazamaz
     public_verification_perm = {
-        guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False)
+        guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False, read_message_history=True)
     }
 
     # BİLGİ KANALLARI (Sadece Rolü Olanlar Görebilir, Mesaj Yazamaz)
     info_read_only = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=False)
+        l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=False, read_message_history=True)
     }
 
-    # SOHBET KANALLARI (Sadece Rolü Olanlar Görebilir VE Mesaj Yazabilir)
+    # SOHBET KANALLARI (Sadece Rolü Olanlar Görebilir, Geçmişi Okuyabilir VE Mesaj Yazabilir)
     comm_full_perm = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
     }
 
     # BİLET KANALI (Sadece Rolü Olanlar Görebilir, Mesaj Yazamaz - Butona Basabilir)
     ticket_channel_perm = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=False),
-        owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=False, read_message_history=True),
+        owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True),
+        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
     }
 
     # LOGS KANALI (Sadece Admin & Owner)
     logs_admin_only = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         mod_role: discord.PermissionOverwrite(read_messages=False),
-        owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True),
+        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
     }
 
     staff_text_perm = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-        mod_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        owner_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True),
+        admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True),
+        mod_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
     }
 
     # SES KANALLARI (Sadece Rolü Olanlar Bağlanabilir)
@@ -558,7 +560,7 @@ async def setup_server(interaction: discord.Interaction):
     await voice_cat.create_voice_channel("🔒 Staff Voice", overwrites=staff_voice_perm)
     await voice_cat.create_voice_channel("🔒 Owner & Admin Voice", overwrites=locked_voice_perm)
 
-    embed_done = discord.Embed(title="🔥 APEXIUM STEPPED ACCESS SYSTEM DEPLOYED", description="✅ Kusursuz izin mimarisi kuruldu! Artık ülke seçilip kural onaylanmadan hiçbir sohbet kanalı görünmez.", color=discord.Color.gold())
+    embed_done = discord.Embed(title="🔥 APEXIUM STEPPED ACCESS SYSTEM DEPLOYED", description="✅ Ülke rollerinin üye listesindeki ayrımı kaldırıldı (gizli yetki yapıldı) ve sistem tamamen güncellendi!", color=discord.Color.gold())
     try: await interaction.followup.send(embed=embed_done, ephemeral=True)
     except Exception: pass
 
