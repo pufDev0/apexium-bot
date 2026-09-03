@@ -232,7 +232,6 @@ async def on_ready():
     except Exception as e:
         print(f"Hata: {e}")
 
-# İzinsiz Rol Değişikliği Güvenlik Denetimi
 @bot.event
 async def on_member_update(before, after):
     guild = after.guild
@@ -240,14 +239,12 @@ async def on_member_update(before, after):
         added = [r for r in after.roles if r not in before.roles]
         removed = [r for r in before.roles if r not in before.roles]
         
-        # Eğer bir kullanıcı yetkisiz şekilde kendine/başkasına Admin/Owner/Dev vermeye çalışırsa engelle ve logla
         async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.member_role_update):
             executor = entry.user
             if executor and not executor.bot and executor.id != guild.owner_id:
                 admin_role = discord.utils.get(guild.roles, name="🛠️ Admin")
                 is_executor_admin = admin_role in executor.roles if admin_role else False
                 
-                # Admin veya Owner harici kimse rol değiştiremez
                 if not is_executor_admin:
                     for role in added:
                         await after.remove_roles(role)
@@ -430,6 +427,7 @@ async def setup_server(interaction: discord.Interaction):
         except Exception:
             pass
 
+    # YETKİLİ ROLLERİ (Üst Yönetim)
     owner_role = discord.utils.get(guild.roles, name="👑 Owner") or await guild.create_role(name="👑 Owner", permissions=discord.Permissions.all(), color=discord.Color.gold(), hoist=True)
     dev_role = discord.utils.get(guild.roles, name="👑 Developer") or await guild.create_role(name="👑 Developer", permissions=discord.Permissions.all(), color=discord.Color.teal(), hoist=True)
     
@@ -439,21 +437,23 @@ async def setup_server(interaction: discord.Interaction):
     )
     admin_role = discord.utils.get(guild.roles, name="🛠️ Admin") or await guild.create_role(name="🛠️ Admin", permissions=admin_perms, color=discord.Color.red(), hoist=True)
 
-    # MODERATÖR VE ALT ROLLERDE 'MANAGE ROLES' KESİNLİKLE KAPALI (False)
     mod_perms = discord.Permissions(
         manage_messages=True, mute_members=True, deafen_members=True,
         read_messages=True, send_messages=True, connect=True, speak=True, manage_roles=False
     )
     mod_role = discord.utils.get(guild.roles, name="🛡️ Moderator") or await guild.create_role(name="🛡️ Moderator", permissions=mod_perms, color=discord.Color.blue(), hoist=True)
 
+    # GAMER LEVEL ROLLERİ (Hiyerarşik Sırayla Oluşturma: Master -> L3 -> L2 -> L1)
     gamer_perms = discord.Permissions(
         read_messages=True, send_messages=True, connect=True, speak=True, manage_roles=False, manage_guild=False
     )
-    l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=gamer_perms, color=discord.Color.green(), hoist=True)
-    await guild.create_role(name="⚡ Level 2 Gamer", permissions=gamer_perms, color=discord.Color.blue(), hoist=True)
-    await guild.create_role(name="🔥 Level 3 Gamer", permissions=gamer_perms, color=discord.Color.purple(), hoist=True)
+    
     await guild.create_role(name="👑 Master Gamer", permissions=gamer_perms, color=discord.Color.gold(), hoist=True)
+    await guild.create_role(name="🔥 Level 3 Gamer", permissions=gamer_perms, color=discord.Color.purple(), hoist=True)
+    await guild.create_role(name="⚡ Level 2 Gamer", permissions=gamer_perms, color=discord.Color.blue(), hoist=True)
+    l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=gamer_perms, color=discord.Color.green(), hoist=True)
 
+    # ÜLKE ROLLERİ
     for country in ["🇹🇷 Turkey", "🇬🇧 United Kingdom", "🇺🇸 United States", "🇩🇪 Germany", "🇫🇷 France", "🇪🇸 Spain"]:
         if not discord.utils.get(guild.roles, name=country):
             await guild.create_role(name=country, color=discord.Color.dark_teal())
@@ -561,7 +561,7 @@ async def setup_server(interaction: discord.Interaction):
 
     embed_done = discord.Embed(
         title="🔥 Apexium Core System Online",
-        description="✅ Rol güvenlik kilitleri, Developer rolü ve kanal yapısı kuruldu!",
+        description="✅ Level hiyerarşisi (Master > Level 3 > Level 2 > Level 1) ve güvenlik ayarları güncellendi!",
         color=discord.Color.gold()
     )
     try:
