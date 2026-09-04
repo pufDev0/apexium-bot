@@ -6,9 +6,9 @@ import os
 from datetime import timedelta, datetime, timezone
 from aiohttp import web
 
-# --- RENDER PORT HEALTH CHECK ---
+# --- RENDER WEB SERVER (KEEP-ALIVE HEALTH CHECK) ---
 async def handle_ping(request):
-    return web.Response(text="⚡ APEXIUM CORE ONLINE & ACTIVE ⚡")
+    return web.Response(text="⚡ APEXIUM SECURITY CORE IS ONLINE & ACTIVE 24/7 ⚡")
 
 async def start_web_server():
     app = web.Application()
@@ -19,9 +19,9 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 8080))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"🌐 [SYSTEM] Web Sunucusu {port} portunda aktifleştirildi!")
+    print(f"🌐 [SYSTEM] Web Health-Check Server Running on Port {port}")
 
-# --- DISCORD BOT AYARLARI ---
+# --- DISCORD BOT SETUP ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -45,9 +45,12 @@ async def log_event(guild: discord.Guild, title: str, description: str, color: d
             description=description,
             color=color
         )
-        embed.set_footer(text="Apexium Core Autonomous Security Sentinel", icon_url=bot.user.display_avatar.url)
+        embed.set_footer(text="Apexium Autonomous Defense Network", icon_url=bot.user.display_avatar.url if bot.user else None)
         embed.timestamp = datetime.now(timezone.utc)
-        await log_channel.send(embed=embed)
+        try:
+            await log_channel.send(embed=embed)
+        except Exception as e:
+            print(f"Log gönderme hatası: {e}")
 
 def is_owner(interaction: discord.Interaction) -> bool:
     return interaction.user.id == interaction.guild.owner_id
@@ -64,7 +67,7 @@ def is_staff(interaction: discord.Interaction) -> bool:
     mod_role = discord.utils.get(interaction.guild.roles, name="🛡️ Moderator")
     return mod_role in interaction.user.roles if mod_role else False
 
-# --- ARAYÜZ (VIEWS) ---
+# --- VIEWS ---
 class DownloadGameView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -97,7 +100,6 @@ class CountrySelectView(discord.ui.View):
         }
         
         role_name = country_roles.get(val, "🇹🇷 Turkey")
-        # hoist=False yapılarak üye listesinde ayrı gösterilmesi engellendi (gizli rol yapıldı)
         role = discord.utils.get(guild.roles, name=role_name) or await guild.create_role(name=role_name, color=discord.Color.dark_teal(), hoist=False)
         
         user_languages[member.id] = 'tr' if val == 'TR' else 'en'
@@ -200,7 +202,7 @@ class CloseTicketView(discord.ui.View):
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
-# --- AUTOMATIC LEVEL DÖNGÜSÜ ---
+# --- AUTOMATIC LEVEL SYSTEM ---
 @tasks.loop(hours=12)
 async def check_member_levels():
     for guild in bot.guilds:
@@ -233,7 +235,7 @@ async def check_member_levels():
 async def on_ready():
     activity = discord.Activity(type=discord.ActivityType.watching, name="Apexium Universe | /help")
     await bot.change_presence(status=discord.Status.online, activity=activity)
-    print(f'⚡ [SYSTEM] Apexium Security Bot [{bot.user.name}] Aktif!')
+    print(f'⚡ [SYSTEM ONLINE] Apexium Bot [{bot.user.name}] Başarıyla Giriş Yaptı!')
     bot.add_view(RuleAcceptView())
     bot.add_view(TicketView())
     bot.add_view(DownloadGameView())
@@ -248,7 +250,6 @@ async def on_ready():
     except Exception as e:
         print(f"Hata: {e}")
 
-# YETKİSİZ ROL EKLEME ENGELLEYİCİ
 @bot.event
 async def on_member_update(before, after):
     guild = after.guild
@@ -334,11 +335,10 @@ def create_rules_embed(guild: discord.Guild) -> discord.Embed:
               "Aşağıdaki **VERIFY ACCESS** butonuna basarak tüm sunucu kanallarına erişim sağlayabilirsiniz.",
         inline=False
     )
-    embed.set_footer(text="Apexium Autonomous Defense Network", icon_url=bot.user.display_avatar.url)
+    embed.set_footer(text="Apexium Autonomous Defense Network", icon_url=bot.user.display_avatar.url if bot.user else None)
     return embed
 
-# --- HERKESE AÇIK 4 KOMUT ---
-
+# --- PUBLIC COMMANDS ---
 @bot.tree.command(name="info", description="Apexium evreni, geliştirici ve sunucu hakkında detaylı uzman bilgiler.")
 async def info_command(interaction: discord.Interaction):
     guild = interaction.guild
@@ -356,7 +356,7 @@ async def info_command(interaction: discord.Interaction):
     embed.add_field(name="📊 Sunucu Ağ Bilgisi", value=f"• **Topluluk:** {guild.name}\n• **Toplam Üye:** {guild.member_count}\n• **Kuruluş:** {guild.created_at.strftime('%d.%m.%Y')}", inline=False)
 
     if owner and owner.display_avatar: embed.set_thumbnail(url=owner.display_avatar.url)
-    embed.set_footer(text="Apexium Core Intelligence • Developed by Berat Eşkiler", icon_url=bot.user.display_avatar.url)
+    embed.set_footer(text="Apexium Core Intelligence • Developed by Berat Eşkiler", icon_url=bot.user.display_avatar.url if bot.user else None)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="help", description="Apexium Core erişim ve komut rehberi.")
@@ -373,13 +373,13 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="📩 4. Destek Masası", value="Destek almak için `#create-ticket` kanalındaki butona basın.", inline=False)
     embed.add_field(name="🏓 5. Erişim Komutları", value="• `/ping` — Ağ gecikmesini ölçer\n• `/info` — Oyun ve Yapımcı Bilgisi\n• `/language` — Dil panelini açar\n• `/help` — Bu rehber panelini gösterir", inline=False)
 
-    embed.set_footer(text="Apexium Autonomous Command Center", icon_url=bot.user.display_avatar.url)
+    embed.set_footer(text="Apexium Autonomous Command Center", icon_url=bot.user.display_avatar.url if bot.user else None)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="language", description="Select your language / Dilinizi ve ülkenizi seçin.")
 async def language(interaction: discord.Interaction):
     embed = discord.Embed(title="🌐 LANGUAGE & REGION SELECTION", description="Lütfen aşağıdaki menüden ülkenizi seçin / Select your sector below:", color=discord.Color.blurple())
-    embed.set_footer(text="Apexium Regional Routing", icon_url=bot.user.display_avatar.url)
+    embed.set_footer(text="Apexium Regional Routing", icon_url=bot.user.display_avatar.url if bot.user else None)
     await interaction.response.send_message(embed=embed, view=CountrySelectView(), ephemeral=True)
 
 @bot.tree.command(name="ping", description="Botun ağ gecikmesini ve sistem tepki süresini ölçer.")
@@ -390,11 +390,10 @@ async def ping(interaction: discord.Interaction):
         description=f"🌐 Core Latency: **{ms}ms**\n🛡️ System Status: **ALL SYSTEMS OPERATIONAL**",
         color=discord.Color.green()
     )
-    embed.set_footer(text="Apexium Core Performance Monitor", icon_url=bot.user.display_avatar.url)
+    embed.set_footer(text="Apexium Core Performance Monitor", icon_url=bot.user.display_avatar.url if bot.user else None)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- YÖNETİCİ KOMUTLARI ---
-
+# --- ADMIN COMMANDS ---
 @bot.tree.command(name="sunucukur", description="Adımlı doğrulama ve kilitli izin yapısını kurar.")
 @app_commands.default_permissions(administrator=True)
 async def setup_server(interaction: discord.Interaction):
@@ -405,18 +404,15 @@ async def setup_server(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild = interaction.guild
 
-    # 1. KANALLARI SİL
     for channel in guild.channels:
         try: await channel.delete()
         except Exception: pass
 
-    # 2. ESKİ ROLLERİ TEMİZLE
     for role in guild.roles:
         if role.name != "@everyone" and role < guild.me.top_role:
             try: await role.delete()
             except Exception: pass
 
-    # @everyone İZİNLERİ (Sadece okuyabilir, geçmişi görebilir)
     try:
         everyone_perms = discord.Permissions(
             read_messages=True, send_messages=False, connect=False, speak=False,
@@ -425,7 +421,6 @@ async def setup_server(interaction: discord.Interaction):
         await guild.default_role.edit(permissions=everyone_perms)
     except Exception: pass
 
-    # 3. YENİ ROLLER
     owner_role = discord.utils.get(guild.roles, name="👑 Owner") or await guild.create_role(name="👑 Owner", permissions=discord.Permissions.all(), color=discord.Color.gold(), hoist=True)
     dev_role = discord.utils.get(guild.roles, name="👑 Developer") or await guild.create_role(name="👑 Developer", permissions=discord.Permissions.all(), color=discord.Color.teal(), hoist=True)
     
@@ -442,7 +437,6 @@ async def setup_server(interaction: discord.Interaction):
     await guild.create_role(name="⚡ Level 2 Gamer", permissions=gamer_perms, color=discord.Color.blue(), hoist=True)
     l1_gamer = discord.utils.get(guild.roles, name="🎮 Level 1 Gamer") or await guild.create_role(name="🎮 Level 1 Gamer", permissions=gamer_perms, color=discord.Color.green(), hoist=True)
 
-    # ÜLKE ROLLERİ (hoist=False yapılarak gizli yetki rolü yapıldı)
     for country in ["🇹🇷 Turkey", "🇬🇧 United Kingdom", "🇺🇸 United States", "🇩🇪 Germany", "🇫🇷 France", "🇪🇸 Spain"]:
         if not discord.utils.get(guild.roles, name=country):
             await guild.create_role(name=country, permissions=gamer_perms, color=discord.Color.dark_teal(), hoist=False)
@@ -450,26 +444,20 @@ async def setup_server(interaction: discord.Interaction):
     try: await interaction.user.add_roles(owner_role, dev_role)
     except Exception: pass
 
-    # --- KANAL İZİN MİMARİSİ ---
-
-    # WELCOME VE RULES: Herkes görebilir ve geçmişi okuyabilir ama mesaj yazamaz
     public_verification_perm = {
         guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False, read_message_history=True)
     }
 
-    # BİLGİ KANALLARI (Sadece Rolü Olanlar Görebilir, Mesaj Yazamaz)
     info_read_only = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=False, read_message_history=True)
     }
 
-    # SOHBET KANALLARI (Sadece Rolü Olanlar Görebilir, Geçmişi Okuyabilir VE Mesaj Yazabilir)
     comm_full_perm = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
     }
 
-    # BİLET KANALI (Sadece Rolü Olanlar Görebilir, Mesaj Yazamaz - Butona Basabilir)
     ticket_channel_perm = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         l1_gamer: discord.PermissionOverwrite(read_messages=True, send_messages=False, read_message_history=True),
@@ -477,7 +465,6 @@ async def setup_server(interaction: discord.Interaction):
         admin_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
     }
 
-    # LOGS KANALI (Sadece Admin & Owner)
     logs_admin_only = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         mod_role: discord.PermissionOverwrite(read_messages=False),
@@ -492,7 +479,6 @@ async def setup_server(interaction: discord.Interaction):
         mod_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
     }
 
-    # SES KANALLARI (Sadece Rolü Olanlar Bağlanabilir)
     public_voice_perm = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False, connect=False),
         l1_gamer: discord.PermissionOverwrite(read_messages=True, connect=True, speak=True)
@@ -511,9 +497,6 @@ async def setup_server(interaction: discord.Interaction):
         mod_role: discord.PermissionOverwrite(connect=True, view_channel=True)
     }
 
-    # --- KANALLARI OLUŞTURMA ---
-
-    # 1. INFORMATION KATEGORİSİ
     info_cat = await guild.create_category("INFORMATION")
     welcome_ch = await info_cat.create_text_channel("welcome", overwrites=public_verification_perm)
     rules_ch = await info_cat.create_text_channel("rules", overwrites=public_verification_perm)
@@ -534,16 +517,14 @@ async def setup_server(interaction: discord.Interaction):
 
     download_embed = discord.Embed(title="🎮 DOWNLOAD APEXIUM: PARKOUR CHRONICLES", description=f"**Apexium Trial** sürümünü aşağıdaki bağlantıdan hemen indirebilirsiniz!\n\n🔗 **Direct Link:**\n{GAME_ITCH_LINK}", color=discord.Color.green())
     download_embed.set_image(url=DOWNLOAD_GAME_BANNER)
-    download_embed.set_footer(text="Apexium Studio • Official itch.io Release", icon_url=bot.user.display_avatar.url)
+    download_embed.set_footer(text="Apexium Studio • Official itch.io Release", icon_url=bot.user.display_avatar.url if bot.user else None)
     await download_ch.send(embed=download_embed, view=DownloadGameView())
 
-    # 2. COMMUNITY KATEGORİSİ
     comm_cat = await guild.create_category("COMMUNITY")
     await comm_cat.create_text_channel("general-chat", overwrites=comm_full_perm)
     await comm_cat.create_text_channel("media-share", overwrites=comm_full_perm)
     await comm_cat.create_text_channel("bot-commands", overwrites=comm_full_perm)
 
-    # 3. SUPPORT & FEEDBACK KATEGORİSİ
     supp_cat = await guild.create_category("SUPPORT & FEEDBACK")
     await supp_cat.create_text_channel("bug-reports", overwrites=comm_full_perm)
     await supp_cat.create_text_channel("suggestions", overwrites=comm_full_perm)
@@ -553,18 +534,16 @@ async def setup_server(interaction: discord.Interaction):
     ticket_embed.set_image(url=DOWNLOAD_GAME_BANNER)
     await ticket_channel.send(embed=ticket_embed, view=TicketView())
 
-    # 4. VOICE CHANNELS KATEGORİSİ
     voice_cat = await guild.create_category("VOICE CHANNELS")
     await voice_cat.create_voice_channel("Public Lounge", overwrites=public_voice_perm)
     await voice_cat.create_voice_channel("Squad 1", overwrites=public_voice_perm)
     await voice_cat.create_voice_channel("🔒 Staff Voice", overwrites=staff_voice_perm)
     await voice_cat.create_voice_channel("🔒 Owner & Admin Voice", overwrites=locked_voice_perm)
 
-    embed_done = discord.Embed(title="🔥 APEXIUM STEPPED ACCESS SYSTEM DEPLOYED", description="✅ Ülke rollerinin üye listesindeki ayrımı kaldırıldı (gizli yetki yapıldı) ve sistem tamamen güncellendi!", color=discord.Color.gold())
+    embed_done = discord.Embed(title="🔥 APEXIUM STEPPED ACCESS SYSTEM DEPLOYED", description="✅ Sunucu kanalları ve güvenlik hiyerarşisi başarıyla kuruldu!", color=discord.Color.gold())
     try: await interaction.followup.send(embed=embed_done, ephemeral=True)
     except Exception: pass
 
-# /duyuru
 @bot.tree.command(name="duyuru", description="Duyurular kanalına görsel ve açıklamalı sinematik duyuru gönderir.")
 @app_commands.default_permissions(administrator=True)
 async def announce(interaction: discord.Interaction, title: str, message: str, image_url: str = None):
@@ -590,7 +569,6 @@ async def announce(interaction: discord.Interaction, title: str, message: str, i
     await ann_channel.send(content="@everyone", embed=embed)
     await interaction.response.send_message("📢 Duyuru paylaşıldı!", ephemeral=True)
 
-# /kurallar
 @bot.tree.command(name="kurallar", description="#rules kanalına kural mesajını ve onay butonunu yeniden yollar.")
 @app_commands.default_permissions(administrator=True)
 async def post_rules(interaction: discord.Interaction):
@@ -602,7 +580,6 @@ async def post_rules(interaction: discord.Interaction):
         await rules_ch.send(embed=create_rules_embed(interaction.guild), view=RuleAcceptView())
         await interaction.response.send_message("✅ Kurallar gönderildi.", ephemeral=True)
 
-# /ban
 @bot.tree.command(name="ban", description="Bir kullanıcıyı sunucudan yasaklar.")
 @app_commands.default_permissions(ban_members=True)
 async def ban_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
@@ -612,7 +589,6 @@ async def ban_user(interaction: discord.Interaction, member: discord.Member, rea
     await member.ban(reason=reason)
     await interaction.response.send_message(f"🚫 {member.mention} yasaklandı.", ephemeral=True)
 
-# /kick
 @bot.tree.command(name="kick", description="Bir kullanıcıyı sunucudan atar.")
 @app_commands.default_permissions(kick_members=True)
 async def kick_user(interaction: discord.Interaction, member: discord.Member, reason: str = "Sebep belirtilmedi"):
@@ -622,7 +598,6 @@ async def kick_user(interaction: discord.Interaction, member: discord.Member, re
     await member.kick(reason=reason)
     await interaction.response.send_message(f"👞 {member.mention} atıldı.", ephemeral=True)
 
-# /mute
 @bot.tree.command(name="mute", description="Bir kullanıcıyı belirli bir süre susturur (dakika).")
 @app_commands.default_permissions(moderate_members=True)
 async def mute_user(interaction: discord.Interaction, member: discord.Member, minutes: int, reason: str = "Sebep belirtilmedi"):
@@ -632,7 +607,6 @@ async def mute_user(interaction: discord.Interaction, member: discord.Member, mi
     await member.timeout(timedelta(minutes=minutes), reason=reason)
     await interaction.response.send_message(f"🤐 {member.mention} {minutes} dakika susturuldu.", ephemeral=True)
 
-# /unmute
 @bot.tree.command(name="unmute", description="Bir kullanıcının susturmasını kaldırır.")
 @app_commands.default_permissions(moderate_members=True)
 async def unmute_user(interaction: discord.Interaction, member: discord.Member):
@@ -642,7 +616,6 @@ async def unmute_user(interaction: discord.Interaction, member: discord.Member):
     await member.timeout(None)
     await interaction.response.send_message(f"🔊 {member.mention} susturması kaldırıldı.", ephemeral=True)
 
-# /lock
 @bot.tree.command(name="lock", description="Komutun yazıldığı kanala mesaj gönderimini kilitler.")
 @app_commands.default_permissions(manage_channels=True)
 async def lock_channel(interaction: discord.Interaction):
@@ -654,7 +627,6 @@ async def lock_channel(interaction: discord.Interaction):
     await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
     await interaction.response.send_message("🔒 Kanal kilitlendi.")
 
-# /unlock
 @bot.tree.command(name="unlock", description="Kilitli kanalı tekrar mesaj gönderimine açar.")
 @app_commands.default_permissions(manage_channels=True)
 async def unlock_channel(interaction: discord.Interaction):
@@ -666,7 +638,6 @@ async def unlock_channel(interaction: discord.Interaction):
     await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
     await interaction.response.send_message("🔓 Kanal açıldı.")
 
-# /sil
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı kanaldan siler.")
 @app_commands.default_permissions(manage_messages=True)
 async def purge_messages(interaction: discord.Interaction, amount: int):
@@ -677,11 +648,24 @@ async def purge_messages(interaction: discord.Interaction, amount: int):
     deleted = await interaction.channel.purge(limit=amount)
     await interaction.followup.send(f"🗑️ {len(deleted)} mesaj silindi.", ephemeral=True)
 
-# --- ANA ÇALIŞTIRMA DÖNGÜSÜ ---
+# --- ENGINE START ---
 async def main():
     await start_web_server()
-    token = os.getenv("DISCORD_TOKEN") or "MTU0NDY5OTM3OTA5OTc3MDg5Mg.GLxPNK.zX5pectcQSndVdHhUNVGitM9V5GqD_kWGQ5L_0"
-    await bot.start(token)
+    token = os.getenv("DISCORD_TOKEN")
+    if not token:
+        print("❌ HATA: DISCORD_TOKEN bulunamadı! Lütfen Render Environment Variable kısmına ekleyin.")
+        return
+    
+    while True:
+        try:
+            print("🚀 Bot Discord ağına bağlanıyor...")
+            await bot.start(token)
+        except discord.errors.LoginFailure:
+            print("❌ GEÇERSİZ TOKEN! Lütfen Render Environment Variables üzerinden DISCORD_TOKEN ayarını kontrol edin.")
+            break
+        except Exception as e:
+            print(f"⚠️ Bağlantı hatası oluştu, 5 saniye içinde yeniden deneniyor: {e}")
+            await asyncio.sleep(5)
 
 if __name__ == "__main__":
     asyncio.run(main())
